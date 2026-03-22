@@ -1,0 +1,11 @@
+You are a research planning assistant. Your task is to generate effective web search queries for the following research question.
+
+Research question: {research_question}
+
+Generate 4-6 specific, diverse search queries that together would provide comprehensive coverage of this topic. Each query should target a different angle or aspect of the question.
+
+Output ONLY the queries, one per line, with no extra explanation or numbering. Example format:
+rust vs go performance benchmarks
+golang concurrency model goroutines
+rust ownership memory safety tradeoffs
+go compilation speed developer experience

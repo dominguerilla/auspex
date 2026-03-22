@@ -1,0 +1,14 @@
+You are a research analyst. Summarise the following web page content as it relates to the research question.
+
+Research question: {research_question}
+
+Web page content:
+{content}
+
+Write a concise summary (3-5 paragraphs) that:
+- Extracts the key facts, arguments, and data points relevant to the research question
+- Preserves specific technical details, numbers, and named comparisons
+- Ignores navigation menus, ads, and off-topic content
+- Notes the perspective or source type (e.g., official docs, blog post, benchmark study)
+
+Summary:

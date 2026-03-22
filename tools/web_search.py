@@ -1,0 +1,64 @@
+"""
+CONCEPT: Tool Wrapping — Normalising Third-Party APIs
+======================================================
+Pattern: Thin wrapper that normalises output to a known schema
+
+DuckDuckGo's Python library returns results in its own dict format.
+Rather than letting every agent know about that format, this module
+exposes a single function with a stable return type: List[dict] with
+keys {title, url, snippet}.
+
+What is given:
+  - The DuckDuckGoSearchResults tool instantiation
+  - The raw_results = tool.run(query) call
+
+What you must implement:
+  - Normalise each raw result dict into {title, url, snippet}
+  - DuckDuckGo returns dicts with keys: "title", "href" (not "url"), "body" (not "snippet")
+  - Return an empty list if the tool raises (network error, rate limit, etc.)
+
+Normalisation hint:
+  raw = tool.run(query)  # returns a string repr of a list of dicts; eval carefully
+  Actually DuckDuckGoSearchResults.run() returns a STRING like:
+    "[{'snippet': '...', 'title': '...', 'link': '...'}, ...]"
+  Use ast.literal_eval() to parse it safely. Keys vary by version — inspect
+  what you actually get by printing one result during development.
+
+Safe parsing hint:
+  import ast
+  try:
+      items = ast.literal_eval(raw)
+  except Exception:
+      return []
+"""
+
+import ast
+from langchain_community.tools import DuckDuckGoSearchResults
+
+# max_results controls how many hits per query; 5 is a good default
+_tool = DuckDuckGoSearchResults(max_results=5)
+
+
+def web_search(query: str) -> list[dict]:
+    """
+    Search DuckDuckGo and return normalised results.
+
+    Parameters
+    ----------
+    query : str
+        The search query string.
+
+    Returns
+    -------
+    List[dict]
+        Each dict has keys: title (str), url (str), snippet (str).
+        Returns empty list on error.
+    """
+    # TODO: Call _tool.run(query) to get raw string output.
+    # Parse it with ast.literal_eval() inside a try/except.
+    # Normalise each item to {"title": ..., "url": ..., "snippet": ...}.
+    # DuckDuckGoSearchResults keys are: "title", "link" (use as url), "snippet".
+    # Return the normalised list (or [] on any error).
+    #
+    # YOUR CODE HERE
+    raise NotImplementedError("Implement web_search normalisation in tools/web_search.py")

@@ -1,0 +1,5 @@
+You are a search specialist. This file is a placeholder — the searcher agent
+does not currently use an LLM call. It executes tool calls directly.
+
+If you extend the searcher to use an LLM (e.g. to refine queries based on
+critic feedback), add your prompt here and load it in agents/searcher.py.
