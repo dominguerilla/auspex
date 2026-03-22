@@ -61,4 +61,10 @@ def web_search(query: str) -> list[dict]:
     # Return the normalised list (or [] on any error).
     #
     # YOUR CODE HERE
+    try:
+        raw_results = _tool.run(query)
+        items = ast.literal_eval(raw_results)
+        return [{'title' : item['title'], 'url' : item['link'], 'snippet' : item['snippet']} for item in items]         
+    except Exception: 
+        return []
     raise NotImplementedError("Implement web_search normalisation in tools/web_search.py")
