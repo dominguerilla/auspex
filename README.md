@@ -1,4 +1,5 @@
 # Multi-Agent Research Assistant
+*This is a small pet project to learn the basics of some common agentic LLM technlogies. Claude Code created the scaffolding + test suites--I am the one that implements the stubs.*
 
 A portfolio-grade agentic system built with **LangGraph** and **Ollama** that researches topics by orchestrating a graph of specialised agents.
 
