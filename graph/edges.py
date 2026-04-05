@@ -33,12 +33,10 @@ def should_revise_or_write(state: ResearchState) -> str:
     "searcher"  — critique failed AND we haven't hit the iteration cap
     "writer"    — critique passed OR we've exhausted allowed iterations
     """
-    # TODO: Read state["critique"]["passed"] and compare state["iteration"] to state["max_iterations"].
-    # Return "writer" if research is good enough or we're out of retries.
-    # Return "searcher" to loop back and gather more sources.
-    #
-    # Hint: the critic increments state["iteration"] before this function runs,
-    # so iteration=1 means one critique cycle has already completed.
-    #
-    # YOUR CODE HERE
-    raise NotImplementedError("Implement should_revise_or_write in graph/edges.py")
+    critique = state.get("critique")
+    if critique and critique["passed"]:
+       return "writer"
+      
+    if state["iteration"] >= state["max_iterations"]:
+       return "writer" 
+    return "searcher"
