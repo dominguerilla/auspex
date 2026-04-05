@@ -66,20 +66,50 @@ def run_critic(state: ResearchState) -> dict:
     response = llm.invoke([HumanMessage(content=prompt)])
     raw_text = response.content
 
-    # TODO: Parse raw_text into a CritiqueResult TypedDict.
-    # The prompt asks the model to output:
-    #   Line 1: "PASSED" or "FAILED"
-    #   Line 2+: Feedback text
-    #   Optional: "MISSING: topic1, topic2, ..."
-    #
-    # Parse each part and construct:
-    #   CritiqueResult(passed=..., feedback=..., missing_topics=[...])
-    #
-    # YOUR CODE HERE
-    raise NotImplementedError("Implement CritiqueResult parsing in agents/critic.py")
+    lines = raw_text.splitlines()
+    passed, verdict_idx = find_verdict(lines)
+    feedback_lines, missing_idx = find_feedback_and_missing(verdict_idx, lines)
+    missing_topics = get_missing_topics(missing_idx, lines)
+    feedback = "\n".join(feedback_lines).strip()
+    critique = CritiqueResult(passed=passed, feedback=feedback, missing_topics=missing_topics)
 
-    # IMPORTANT: Always return iteration incremented by 1.
-    # The conditional edge reads this to enforce max_iterations.
     new_iteration = state["iteration"] + 1
 
-    # TODO: Return {"critique": critique, "iteration": new_iteration, "messages": [AIMessage(content=raw_text)]}
+    return {"critique" : critique, "iteration" : new_iteration, "messages" : [AIMessage(content=raw_text)]}
+
+def find_verdict(lines: list[str]):
+    passed = False
+    verdict_line = None
+    for i,line in enumerate(lines):
+        upper = line.strip().upper()
+        if upper == "PASSED":
+            passed = True
+            verdict_line = i
+            break
+        elif upper == "FAILED":
+            passed = False
+            verdict_line = i
+            break
+    return (passed, verdict_line)
+
+def find_feedback_and_missing(start_idx: int | None, lines: list[str]):
+    feedback_lines = []
+    missing_idx = None
+    if start_idx is not None:
+        for i, line in enumerate(lines[start_idx + 1:]):
+            if line.strip().upper().startswith("MISSING:"):
+                missing_idx = i
+                break
+            else:
+                feedback_lines.append(line)
+
+    return (feedback_lines, missing_idx)
+
+def get_missing_topics(idx: int | None, lines: list[str]):
+    missing_topics = []
+    if idx is not None:
+        missing_line = lines[idx]
+        colon_idx = missing_line.index(":")
+        missing_topics = [topic.strip() for topic in missing_line[colon_idx:].split(",") if topic.strip()]
+
+    return missing_topics
