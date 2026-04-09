@@ -44,7 +44,7 @@ invoke() hint:
 import argparse
 from datetime import datetime
 from pathlib import Path
-
+from graph.graph_builder import build_graph
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -85,20 +85,23 @@ def main():
     print(f"Output path:       {output_path}")
     print()
 
-    # TODO: Import build_graph from graph.graph_builder
-    # TODO: graph = build_graph()
-    #
-    # TODO: Construct initial_state dict (see hint in docstring above)
-    #
-    # TODO: print("Running research graph...")
-    # TODO: final_state = graph.invoke(initial_state)
-    #
-    # TODO: Extract final_state["final_report"] and write to output_path
-    #   output_path.write_text(report, encoding="utf-8")
-    #   print(f"\nReport written to: {output_path}")
-    #
-    # YOUR CODE HERE
-    raise NotImplementedError("Implement graph invocation in main.py")
+    graph = build_graph()
+    initial_state = {
+         "research_question": args.question,
+         "max_iterations": args.max_iterations,
+         "iteration": 0,
+         "search_queries": [],
+         "search_results": [],
+         "sources": [],
+         "critique": None,
+         "final_report": None,
+         "messages": [],
+     }
+    print("Running research graph...")
+    final_state = graph.invoke(initial_state)
+    report = final_state["final_report"]
+    output_path.write_text(report, encoding="utf-8")
+    print(f"\nReport written to: {output_path}")
 
 
 if __name__ == "__main__":
