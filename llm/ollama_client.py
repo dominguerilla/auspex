@@ -1,54 +1,82 @@
 """
 CONCEPT: Centralized LLM Construction
 ======================================
-This file is given complete. Read it carefully — understanding it unblocks every agent.
+Factory pattern: get_llm() reads config from the environment and returns a
+LangChain chat model. Every agent imports THIS function instead of constructing
+its own LLM, so swapping providers is a config change — not a code change.
 
-Pattern: Factory function
-  get_llm() is a factory: it reads config from the environment and returns a
-  fully-configured ChatOllama instance. Every agent imports THIS function instead
-  of constructing its own LLM. This means:
-    - One place to change the model, temperature, or base URL
-    - Agents don't need to know anything about Ollama — they just call llm.invoke()
-    - Swapping the model (qwen2.5:3b → qwen2.5:7b) requires only a .env change
+Two providers are supported, selected by the LLM_PROVIDER env var:
 
-LangChain's ChatOllama speaks the same interface as ChatOpenAI, ChatAnthropic, etc.
-That interface is: llm.invoke(messages) → AIMessage. The messages argument is a list
-of LangChain message objects (HumanMessage, SystemMessage, AIMessage).
+  LLM_PROVIDER=ollama       (default — local development)
+    Reads OLLAMA_BASE_URL, OLLAMA_MODEL. Returns ChatOllama.
+
+  LLM_PROVIDER=huggingface  (cloud deployment, e.g. HF Spaces)
+    Reads HF_TOKEN, HF_MODEL. Returns ChatHuggingFace wrapping a
+    HuggingFaceEndpoint that calls the HF Inference API.
+
+Both providers return objects implementing LangChain's BaseChatModel interface,
+so agents call llm.invoke(messages) without caring which backend is live.
 """
 
 import os
 from dotenv import load_dotenv
-from langchain_ollama import ChatOllama
 
 load_dotenv()
 
 
-def get_llm(temperature: float = 0.3) -> ChatOllama:
+def get_llm(temperature: float = 0.3):
     """
-    Return a configured ChatOllama instance.
+    Return a LangChain chat model configured from the environment.
 
     Parameters
     ----------
     temperature : float
         Controls randomness. 0.0 = deterministic, 1.0 = creative.
-        Agents that need structured output (orchestrator, critic) should use
-        lower temperatures. The writer can use slightly higher values.
 
     Environment variables read
     --------------------------
-    OLLAMA_BASE_URL : str  (default: http://localhost:11434)
-    OLLAMA_MODEL    : str  (default: qwen2.5:3b)
+    LLM_PROVIDER     : "ollama" | "huggingface"  (default: "ollama")
+    OLLAMA_BASE_URL  : str  (default: http://localhost:11434)
+    OLLAMA_MODEL     : str  (default: qwen2.5:3b)
+    HF_TOKEN         : str  (required when LLM_PROVIDER=huggingface)
+    HF_MODEL         : str  (default: meta-llama/Llama-3.1-8B-Instruct)
 
     Returns
     -------
-    ChatOllama
-        Drop-in compatible with any LangChain chat model.
+    BaseChatModel
+        A LangChain chat model. Callers use llm.invoke(messages).
     """
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+    provider = os.getenv("LLM_PROVIDER", "ollama").lower()
 
-    return ChatOllama(
-        base_url=base_url,
-        model=model,
-        temperature=temperature,
+    if provider == "ollama":
+        from langchain_ollama import ChatOllama
+
+        return ChatOllama(
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
+            temperature=temperature,
+        )
+
+    if provider == "huggingface":
+        from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+
+        token = os.getenv("HF_TOKEN")
+        if not token:
+            raise RuntimeError(
+                "LLM_PROVIDER=huggingface but HF_TOKEN is not set. "
+                "Create a token at https://huggingface.co/settings/tokens "
+                "and export it as HF_TOKEN."
+            )
+
+        endpoint = HuggingFaceEndpoint(
+            repo_id=os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct"),
+            task="text-generation",
+            huggingfacehub_api_token=token,
+            temperature=temperature,
+            max_new_tokens=1024,
+        )
+        return ChatHuggingFace(llm=endpoint)
+
+    raise ValueError(
+        f"Unknown LLM_PROVIDER={provider!r}. Expected 'ollama' or 'huggingface'."
     )
