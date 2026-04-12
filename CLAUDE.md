@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # set OLLAMA_MODEL (default: qwen2.5:3b)
-ollama pull qwen2.5:3b
+cp .env.example .env   # set LLM_PROVIDER and model vars
+ollama pull qwen2.5:3b  # only needed for LLM_PROVIDER=ollama
 ```
 
 ## Running
@@ -18,7 +18,16 @@ python main.py "Your research question here"
 python main.py "Your question" --max-iterations 3 --output-dir reports/
 ```
 
-There is no automated test suite. Test manually by running `main.py`.
+There is also a Streamlit web UI: `streamlit run streamlit_app.py`.
+
+## Testing
+
+```bash
+pytest          # run all tests
+pytest -x       # stop on first failure
+```
+
+Tests live in `tests/` and mock the LLM and network calls via `unittest.mock`. Test manually with `main.py` for end-to-end validation.
 
 ## Architecture
 
@@ -27,8 +36,8 @@ This is a **LangGraph multi-agent research pipeline**. A `StateGraph` routes a `
 **Flow:**
 ```
 START → orchestrator → searcher → reader → critic → (conditional) → writer → END
-                                                 ↑___________________________|
-                                         (loop if critique failed & iterations remain)
+                          ↑___________________________|
+                  (loop back to searcher if critique failed & iterations remain)
 ```
 
 **State merge rules** (`graph/state.py`):
@@ -49,12 +58,10 @@ START → orchestrator → searcher → reader → critic → (conditional) → 
 
 **Tools** (`tools/`): Thin wrappers — `web_search.py` normalizes DuckDuckGo results to `{title, url, snippet}`; `web_scraper.py` fetches a URL and converts HTML to markdown via BeautifulSoup + markdownify.
 
-**LLM** (`llm/ollama_client.py`): `get_llm(temperature)` is the single factory for `ChatOllama`. Model and base URL come from `.env`. Switch models by changing `OLLAMA_MODEL` — no code changes needed.
+**LLM** (`llm/ollama_client.py`): `get_llm(temperature)` is the single factory. Supports two providers selected by `LLM_PROVIDER` env var: `ollama` (default, local via `ChatOllama`) and `huggingface` (cloud via HF Inference API). Switch models by changing env vars — no code changes needed.
 
 **Prompts** (`prompts/`): Plain `.txt` files with Python `.format()` placeholders. Each agent loads its own prompt at call time.
 
 ## Implementation Status
 
-Many components have `# TODO` stubs. Fully implemented: `state.py`, `ollama_client.py`. Partially implemented: `orchestrator.py`, `graph_builder.py`, `main.py`. Not yet started: all other agents, tools, `edges.py`.
-
-`LEARNING.md` contains concept explanations, vocabulary, and the intended design for each TODO.
+All agents, tools, graph wiring, and `main.py` are implemented. One minor TODO remains in `agents/searcher.py`. `LEARNING.md` contains concept explanations and vocabulary for the patterns used.

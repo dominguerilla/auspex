@@ -1,21 +1,21 @@
 # Multi-Agent Research Assistant
-*This is a small pet project to learn the basics of some common agentic LLM technlogies. Claude Code created the scaffolding + test suites--I am the one that implements the stubs.*
+*This is a small pet project to learn the basics of some common agentic LLM technlogies. Claude Code created the scaffolding + test suites--I am the one that implemented the stubs.*
 
-A portfolio-grade agentic system built with **LangGraph** and **Ollama** that researches topics by orchestrating a graph of specialised agents.
+An agentic system built with **LangGraph** and **Ollama/HuggingFace** that researches topics by orchestrating a graph of specialised agents.
 
 ## Architecture
 
 ```
 START → [orchestrator] → [searcher] → [reader] → [critic]
-                                          ↑            |
-                                          |    critique.passed == False
-                                          |    AND iteration < max_iterations
-                                          └────────────┘
-                                                        |
-                                              critique.passed == True
-                                              OR iteration >= max_iterations
-                                                        ↓
-                                                   [writer] → END
+                              ↑                        |
+                              |    critique.passed == False
+                              |    AND iteration < max_iterations
+                              └────────────────────────┘
+                                                       |
+                                             critique.passed == True
+                                             OR iteration >= max_iterations
+                                                       ↓
+                                                  [writer] → END
 ```
 
 | Agent | Role |
@@ -38,10 +38,28 @@ pip install -r requirements.txt
 
 # 3. Configure environment
 cp .env.example .env
-# Edit .env — set OLLAMA_MODEL=qwen2.5:3b (or qwen2.5:7b for better quality)
+# Edit .env — set LLM_PROVIDER (ollama or huggingface) and the relevant model vars
+```
 
-# 4. Pull the model (if not already available)
+### Ollama (local, default)
+
+```bash
 ollama pull qwen2.5:3b
+```
+
+Set in `.env`:
+```
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=qwen2.5:3b
+```
+
+### HuggingFace (cloud / HF Spaces)
+
+Set in `.env`:
+```
+LLM_PROVIDER=huggingface
+HF_TOKEN=<your HF access token>
+HF_MODEL=meta-llama/Llama-3.1-8B-Instruct
 ```
 
 ## Usage
@@ -53,6 +71,12 @@ python main.py "Best practices for Kubernetes networking" --output-dir reports/
 ```
 
 Reports are written to `output/<timestamp>_<slug>.md`.
+
+### Streamlit Web UI
+
+```bash
+streamlit run streamlit_app.py
+```
 
 ## Testing
 
@@ -74,18 +98,14 @@ pytest -x
 
 Tests live in `tests/` and use fixtures from `tests/conftest.py` — `mock_llm` (a `MagicMock` ChatOllama) and `base_state` (a zeroed `ResearchState` dict).
 
-## Build Order (Learning Path)
-
-1. **Phase 1** — `agents/orchestrator.py`: implement query parsing → test with a REPL script
-2. **Phase 2** — `tools/web_search.py` + `tools/web_scraper.py` + `agents/searcher.py` + `agents/reader.py` + wire 3 nodes in `graph/graph_builder.py`
-3. **Phase 3** — `agents/critic.py` + `graph/edges.py` + conditional edge in `graph_builder.py`
-4. **Phase 4** — `agents/writer.py` + `main.py` → run end-to-end
-
-See `LEARNING.md` for concept explanations.
-
 ## Switching Models
 
-Change `OLLAMA_MODEL` in `.env` — no code changes required:
+Change `LLM_PROVIDER` and the corresponding model variable in `.env` — no code changes required:
 
+**Ollama** (`LLM_PROVIDER=ollama`):
 - `qwen2.5:3b` — fast, good for development
 - `qwen2.5:7b` — better quality for demos
+
+**HuggingFace** (`LLM_PROVIDER=huggingface`):
+- `meta-llama/Llama-3.1-8B-Instruct` — default, good general-purpose model
+- Any HF Inference API-compatible instruct model

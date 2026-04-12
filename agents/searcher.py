@@ -52,13 +52,6 @@ def run_searcher(state: ResearchState) -> dict:
     seen_urls: set[str] = set()
 
     for query in state["search_queries"]:
-        # TODO: Call web_search(query) to get raw results.
-        # web_search returns a list of dicts with keys: title, url, snippet.
-        # For each result:
-        #   1. Check if result["url"] is already in seen_urls → skip if so
-        #   2. Add result["url"] to seen_urls
-        #   3. Append a SearchResult TypedDict to all_results
-        #
         results = web_search(query)
         for result in results:
             if result["url"] in seen_urls:
