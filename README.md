@@ -5,7 +5,7 @@ colorFrom: blue
 colorTo: purple
 sdk: streamlit
 sdk_version: 1.41.1
-python_version: 3.10
+python_version: "3.10"
 app_file: streamlit_app.py
 pinned: false
 short_description: LangGraph multi-agent research pipeline
