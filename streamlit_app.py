@@ -28,7 +28,7 @@ st.set_page_config(
 
 st.title("Multi-Agent Research Assistant")
 st.caption(
-    "A LangGraph pipeline — orchestrator, searcher, reader, critic, writer — "
+    "A LangGraph pipeline — orchestrator, searcher, reader, critic, refiner, writer — "
     "that turns a question into a cited markdown report."
 )
 
@@ -48,7 +48,8 @@ with st.sidebar:
         "2. *Searcher* runs web searches\n"
         "3. *Reader* scrapes and summarizes pages\n"
         "4. *Critic* judges whether the evidence is enough\n"
-        "5. *Writer* produces a final cited report"
+        "5. *Refiner* rewrites queries to fill gaps identified by the critic (on loop-back)\n"
+        "6. *Writer* produces a final cited report"
     )
     st.divider()
     st.markdown(
@@ -68,6 +69,7 @@ NODE_LABELS = {
     "searcher": "Running web searches",
     "reader": "Reading and summarizing sources",
     "critic": "Critiquing evidence",
+    "refiner": "Refining queries to fill gaps",
     "writer": "Writing the final report",
 }
 
