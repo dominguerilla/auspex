@@ -14,6 +14,7 @@ def test_build_graph_does_not_raise():
     with patch("agents.orchestrator.get_llm", return_value=make_mock_llm()), \
          patch("agents.reader.get_llm", return_value=make_mock_llm()), \
          patch("agents.critic.get_llm", return_value=make_mock_llm()), \
+         patch("agents.refiner.get_llm", return_value=make_mock_llm()), \
          patch("agents.writer.get_llm", return_value=make_mock_llm()):
         from graph.graph_builder import build_graph
         build_graph()  # should not raise
@@ -23,6 +24,7 @@ def test_compiled_graph_has_invoke():
     with patch("agents.orchestrator.get_llm", return_value=make_mock_llm()), \
          patch("agents.reader.get_llm", return_value=make_mock_llm()), \
          patch("agents.critic.get_llm", return_value=make_mock_llm()), \
+         patch("agents.refiner.get_llm", return_value=make_mock_llm()), \
          patch("agents.writer.get_llm", return_value=make_mock_llm()):
         from graph.graph_builder import build_graph
         graph = build_graph()
@@ -34,6 +36,7 @@ def test_compiled_graph_has_stream():
     with patch("agents.orchestrator.get_llm", return_value=make_mock_llm()), \
          patch("agents.reader.get_llm", return_value=make_mock_llm()), \
          patch("agents.critic.get_llm", return_value=make_mock_llm()), \
+         patch("agents.refiner.get_llm", return_value=make_mock_llm()), \
          patch("agents.writer.get_llm", return_value=make_mock_llm()):
         from graph.graph_builder import build_graph
         graph = build_graph()
@@ -44,9 +47,10 @@ def test_all_agent_nodes_present():
     with patch("agents.orchestrator.get_llm", return_value=make_mock_llm()), \
          patch("agents.reader.get_llm", return_value=make_mock_llm()), \
          patch("agents.critic.get_llm", return_value=make_mock_llm()), \
+         patch("agents.refiner.get_llm", return_value=make_mock_llm()), \
          patch("agents.writer.get_llm", return_value=make_mock_llm()):
         from graph.graph_builder import build_graph
         graph = build_graph()
     node_names = set(graph.nodes)
-    for expected in ["orchestrator", "searcher", "reader", "critic", "writer"]:
+    for expected in ["orchestrator", "searcher", "reader", "critic", "refiner", "writer"]:
         assert expected in node_names

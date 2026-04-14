@@ -35,6 +35,7 @@ from agents.orchestrator import run_orchestrator
 from agents.searcher import run_searcher
 from agents.reader import run_reader
 from agents.critic import run_critic
+from agents.refiner import run_refiner
 from agents.writer import run_writer
 
 
@@ -48,6 +49,7 @@ def build_graph():
     graph.add_node("searcher", run_searcher)
     graph.add_node("reader", run_reader)
     graph.add_node("critic", run_critic)
+    graph.add_node("refiner", run_refiner)
     graph.add_node("writer", run_writer)
 
     # --- Entry point ---
@@ -60,8 +62,10 @@ def build_graph():
     graph.add_conditional_edges(
             "critic",
             should_revise_or_write,
-            {"searcher":"searcher", "writer":"writer"}
+            {"refiner": "refiner", "writer": "writer"}
             )
+
+    graph.add_edge("refiner", "searcher")
 
     # --- Terminal edge (given) ---
     graph.add_edge("writer", END)
