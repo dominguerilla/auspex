@@ -12,7 +12,7 @@ Why a pure function?
   state fields. This makes it trivially unit-testable:
 
     assert should_revise_or_write({"critique": {"passed": True}, "iteration": 0, "max_iterations": 3}) == "writer"
-    assert should_revise_or_write({"critique": {"passed": False}, "iteration": 0, "max_iterations": 3}) == "searcher"
+    assert should_revise_or_write({"critique": {"passed": False}, "iteration": 0, "max_iterations": 3}) == "refiner"
     assert should_revise_or_write({"critique": {"passed": False}, "iteration": 3, "max_iterations": 3}) == "writer"
 
 State fields to read:
@@ -30,13 +30,13 @@ def should_revise_or_write(state: ResearchState) -> str:
 
     Returns
     -------
-    "searcher"  — critique failed AND we haven't hit the iteration cap
-    "writer"    — critique passed OR we've exhausted allowed iterations
+    "refiner"  — critique failed AND we haven't hit the iteration cap
+    "writer"   — critique passed OR we've exhausted allowed iterations
     """
     critique = state.get("critique")
     if critique and critique["passed"]:
        return "writer"
-      
+
     if state["iteration"] >= state["max_iterations"]:
-       return "writer" 
-    return "searcher"
+       return "writer"
+    return "refiner"

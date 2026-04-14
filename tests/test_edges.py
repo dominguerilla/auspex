@@ -19,8 +19,8 @@ def make_state(passed, iteration, max_iterations):
     (True, 0, 3, "writer"),
     (True, 1, 3, "writer"),
     (True, 3, 3, "writer"),
-    (False, 1, 3, "searcher"),
-    (False, 2, 3, "searcher"),
+    (False, 1, 3, "refiner"),
+    (False, 2, 3, "refiner"),
     (False, 3, 3, "writer"),
     (False, 4, 3, "writer"),
 ])
@@ -39,7 +39,7 @@ def test_return_type_is_str():
 
 def test_return_value_is_valid_node():
     from graph.edges import should_revise_or_write
-    valid_nodes = {"searcher", "writer"}
+    valid_nodes = {"refiner", "writer"}
     for passed in (True, False):
         for iteration in (0, 1, 3, 5):
             state = make_state(passed, iteration, 3)
