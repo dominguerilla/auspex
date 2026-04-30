@@ -62,10 +62,18 @@ def run_reader(state: ResearchState) -> dict:
     for result in state["search_results"]:
         try:
             raw_text = scrape_url(result["url"])
+        except Exception as e:
+            print(f"[reader] scrape failed for {result['url']}: {e} — falling back to snippet")
+            raw_text = result.get("snippet", "")
+
+        if not raw_text:
+            continue
+
+        try:
             prompt = prompt_template.format(research_question=state["research_question"], content=raw_text[:4000])
             summary = llm.invoke([HumanMessage(content=prompt)]).content
             sources.append(ScrapedSource(url=result["url"], summary=summary, raw_length=len(raw_text)))
         except Exception as e:
-            pass
+            print(f"[reader] LLM summarisation failed for {result['url']}: {e}")
 
     return {"sources" : sources}
