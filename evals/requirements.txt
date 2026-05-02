@@ -1,0 +1,7 @@
+# Eval-suite dependencies. Install with:
+#   pip install -r evals/requirements.txt
+#
+# `assay` is the eval harness. Pinned by git ref while the package is local —
+# swap for a PyPI version once it's published.
+assay @ git+https://github.com/dominguerilla/assay.git
+anthropic>=0.40.0  # used by assay.scorers.LLMJudge
