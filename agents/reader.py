@@ -58,6 +58,7 @@ def run_reader(state: ResearchState) -> dict:
     llm = get_llm(temperature=0.2)
     prompt_template = _PROMPT_PATH.read_text()
     sources: list[ScrapedSource] = []
+    print(f"[reader] search_results count: {len(state['search_results'])}")
 
     for result in state["search_results"]:
         try:
@@ -76,4 +77,5 @@ def run_reader(state: ResearchState) -> dict:
         except Exception as e:
             print(f"[reader] LLM summarisation failed for {result['url']}: {e}")
 
+    print(f"[reader] sources produced: {len(sources)}")
     return {"sources" : sources}
