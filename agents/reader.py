@@ -64,8 +64,8 @@ def run_reader(state: ResearchState) -> dict:
         try:
             raw_text = scrape_url(result["url"])
         except Exception as e:
-            print(f"[reader] scrape failed for {result['url']}: {e} — falling back to snippet")
-            raw_text = result.get("snippet", "")
+            print(f"[reader] scrape failed for {result['url']}: {e} — skipping")
+            continue
 
         if not raw_text:
             continue
