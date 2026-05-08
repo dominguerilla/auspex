@@ -37,7 +37,9 @@ report.
 
 | File | Purpose |
 | --- | --- |
-| `cases.jsonl` | 12 hand-authored cases: factoids, explanatory, comparative, freshness, adversarial. Each carries `expected.rubric` (judge sees it) plus structured `must_mention` / `min_sources` (programmatic scorers read them). |
+| `cases/cases.jsonl` | 12 hand-authored cases: factoids, explanatory, comparative, freshness, adversarial. Each carries `expected.rubric` (judge sees it) plus structured `must_mention` / `min_sources` (programmatic scorers read them). |
+| `cases/single_factoid.jsonl` | Single factoid case for quick iteration. |
+| `cases/__init__.py` | Package marker for the cases module. |
 | `adapter.py` | Wraps `graph.invoke(state)` into the `Callable[[dict], dict]` shape `assay` expects. Returns the report text plus `sources`, `critique`, and iteration count for downstream scorers. |
 | `scorers.py` | `MustMention`, `MustNotMention`, `MinSources` — read keywords/thresholds out of `case.expected`. |
 | `run.py` | CLI entry point that wires the four scorers and runs the suite. |

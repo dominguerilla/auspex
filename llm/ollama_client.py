@@ -19,6 +19,7 @@ so agents call llm.invoke(messages) without caring which backend is live.
 """
 
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -51,8 +52,12 @@ def get_llm(temperature: float = 0.3):
     if provider == "ollama":
         from langchain_ollama import ChatOllama
 
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        # ChatOllama uses the native Ollama API, not the OpenAI-compatible /v1 path.
+        # Strip /v1 so OLLAMA_BASE_URL can be set to either form.
+        base_url = base_url.rstrip("/").removesuffix("/v1")
         return ChatOllama(
-            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            base_url=base_url,
             model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
             temperature=temperature,
         )

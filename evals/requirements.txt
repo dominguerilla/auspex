@@ -5,3 +5,4 @@
 # swap for a PyPI version once it's published.
 assay @ git+https://github.com/dominguerilla/assay.git
 anthropic>=0.40.0  # used by assay.scorers.LLMJudge
+openai

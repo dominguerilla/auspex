@@ -27,7 +27,7 @@ State fields written:
 
 from pathlib import Path
 
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from graph.state import ResearchState
 from llm.ollama_client import get_llm

@@ -30,6 +30,7 @@ State fields read:   search_results, research_question
 State fields written: sources
 """
 
+import logging
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage
@@ -37,6 +38,8 @@ from langchain_core.messages import HumanMessage
 from graph.state import ResearchState, ScrapedSource
 from llm.ollama_client import get_llm
 from tools.web_scraper import scrape_url
+
+logger = logging.getLogger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "reader.txt"
 
@@ -58,14 +61,14 @@ def run_reader(state: ResearchState) -> dict:
     llm = get_llm(temperature=0.2)
     prompt_template = _PROMPT_PATH.read_text()
     sources: list[ScrapedSource] = []
-    print(f"[reader] search_results count: {len(state['search_results'])}")
+    logger.info("search_results count: %d", len(state["search_results"]))
 
     for result in state["search_results"]:
         try:
             raw_text = scrape_url(result["url"])
         except Exception as e:
-            print(f"[reader] scrape failed for {result['url']}: {e} — falling back to snippet")
-            raw_text = result.get("snippet", "")
+            logger.warning("scrape failed for %s: %s — skipping", result["url"], e)
+            continue
 
         if not raw_text:
             continue
@@ -75,7 +78,7 @@ def run_reader(state: ResearchState) -> dict:
             summary = llm.invoke([HumanMessage(content=prompt)]).content
             sources.append(ScrapedSource(url=result["url"], summary=summary, raw_length=len(raw_text)))
         except Exception as e:
-            print(f"[reader] LLM summarisation failed for {result['url']}: {e}")
+            logger.warning("LLM summarisation failed for %s: %s", result["url"], e)
 
-    print(f"[reader] sources produced: {len(sources)}")
+    logger.info("sources produced: %d", len(sources))
     return {"sources" : sources}
