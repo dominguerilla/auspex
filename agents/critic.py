@@ -81,7 +81,7 @@ def run_critic(state: ResearchState) -> dict:
 def find_verdict(lines: list[str]) -> tuple[bool, int | None]:
     passed = False
     verdict_line = None
-    for i,line in enumerate(lines):
+    for i, line in enumerate(lines):
         upper = line.strip().upper()
         if upper == "PASSED":
             passed = True

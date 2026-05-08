@@ -42,9 +42,14 @@ invoke() hint:
 """
 
 import argparse
+import logging
 from datetime import datetime
 from pathlib import Path
+
 from graph.graph_builder import build_graph
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -80,28 +85,27 @@ def main():
     output_dir.mkdir(exist_ok=True)
     output_path = output_dir / f"{timestamp}_{slug}.md"
 
-    print(f"Research question: {args.question}")
-    print(f"Max iterations:    {args.max_iterations}")
-    print(f"Output path:       {output_path}")
-    print()
+    logger.info("Research question: %s", args.question)
+    logger.info("Max iterations:    %d", args.max_iterations)
+    logger.info("Output path:       %s", output_path)
 
     graph = build_graph()
     initial_state = {
-         "research_question": args.question,
-         "max_iterations": args.max_iterations,
-         "iteration": 0,
-         "search_queries": [],
-         "search_results": [],
-         "sources": [],
-         "critique": None,
-         "final_report": None,
-         "messages": [],
-     }
-    print("Running research graph...")
+        "research_question": args.question,
+        "max_iterations": args.max_iterations,
+        "iteration": 0,
+        "search_queries": [],
+        "search_results": [],
+        "sources": [],
+        "critique": None,
+        "final_report": None,
+        "messages": [],
+    }
+    logger.info("Running research graph...")
     final_state = graph.invoke(initial_state)
     report = final_state["final_report"]
     output_path.write_text(report, encoding="utf-8")
-    print(f"\nReport written to: {output_path}")
+    logger.info("\nReport written to: %s", output_path)
 
 
 if __name__ == "__main__":
