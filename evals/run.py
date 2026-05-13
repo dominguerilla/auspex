@@ -1,18 +1,21 @@
 """Run the research-agent eval suite.
 
 Usage:
-    python -m evals.run                  # full suite, default scorers
-    python -m evals.run --skip-judge     # skip the LLMJudge (no API key needed)
-    python -m evals.run --concurrency 1  # serialize (kinder to DuckDuckGo + Ollama)
-    python -m evals.run --skip-judge-check  # skip connectivity pre-flight
+    python -m evals.run                                    # full suite, default scorers
+    python -m evals.run --skip-judge                       # skip the LLMJudge (no API key needed)
+    python -m evals.run --concurrency 1                    # serialize (kinder to DuckDuckGo + Ollama)
+    python -m evals.run --skip-judge-check                 # skip connectivity pre-flight
+    python -m evals.run --from-outputs evals/outputs/x.jsonl  # score pre-generated outputs
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 from assay import Eval
@@ -47,6 +50,40 @@ def _judge_diagnostics(judge: LLMJudge) -> str:
     return f"provider={provider}  model={model}  url={url}"
 
 
+def _strip_outputs_to_tmpfile(outputs_path: Path) -> Path:
+    """Write a temp JSONL with the ``output`` key removed so assay can load it as a dataset."""
+    entries = [
+        json.loads(line)
+        for line in outputs_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+    )
+    for entry in entries:
+        tmp.write(json.dumps({k: v for k, v in entry.items() if k != "output"}) + "\n")
+    tmp.close()
+    return Path(tmp.name)
+
+
+def _make_replay_agent(outputs_path: Path):
+    """Return an agent callable that replays saved outputs instead of running the graph."""
+    outputs: dict[str, dict] = {}
+    for line in outputs_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            entry = json.loads(line)
+            key = json.dumps(entry["input"], sort_keys=True)
+            outputs[key] = entry["output"]
+
+    def replay(input_: dict) -> dict:
+        key = json.dumps(input_, sort_keys=True)
+        if key not in outputs:
+            raise KeyError(f"No saved output for input: {input_}")
+        return outputs[key]
+
+    return replay
+
+
 def _check_agent_connectivity() -> None:
     """Smoke-test the agent's LLM before running any cases."""
     from langchain_core.messages import HumanMessage
@@ -75,7 +112,7 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=Path,
-                        default=Path(__file__).parent / "cases.jsonl",
+                        default=Path(__file__).parent / "cases" / "cases.jsonl",
                         help="Path to JSONL file containing test cases (default: evals/cases.jsonl)")
     parser.add_argument("--output-dir", type=Path, default=Path("evals/runs"),
                         help="Directory to save eval results and HTML report (default: evals/runs)")
@@ -91,7 +128,35 @@ def main() -> None:
                         help="Model for the LLM judge. Defaults to OLLAMA_MODEL env var (ollama) or assay package default (others)")
     parser.add_argument("--skip-judge-check", action="store_true",
                         help="Skip the LLM judge connectivity pre-flight check")
+    parser.add_argument("--from-outputs", type=Path, default=None,
+                        metavar="OUTPUTS_JSONL",
+                        help="Score pre-generated outputs instead of running the agent "
+                             "(produced by evals.generate)")
     args = parser.parse_args()
+
+    if args.from_outputs is not None:
+        if not args.from_outputs.exists():
+            print(f"ERROR: outputs file not found: {args.from_outputs}", file=sys.stderr)
+            sys.exit(1)
+        agent_fn = _make_replay_agent(args.from_outputs)
+        if args.dataset == Path(__file__).parent / "cases" / "cases.jsonl":
+            _tmp_dataset = _strip_outputs_to_tmpfile(args.from_outputs)
+            args.dataset = _tmp_dataset
+        else:
+            _tmp_dataset = None
+        print(f"Replaying outputs from {args.from_outputs}", flush=True)
+    else:
+        _tmp_dataset = None
+        agent_fn = agent
+        print("Checking agent LLM connectivity...", flush=True)
+        try:
+            _check_agent_connectivity()
+        except Exception as exc:
+            print(f"ERROR: Agent LLM connectivity check failed: {exc}", file=sys.stderr)
+            print("Check OLLAMA_BASE_URL and OLLAMA_MODEL in your .env (no /v1 suffix for ChatOllama).",
+                  file=sys.stderr)
+            sys.exit(1)
+        print("Agent LLM OK.", flush=True)
 
     scorers = [MustMention(), MustNotMention(), MinSources()]
     judge = None
@@ -104,16 +169,6 @@ def main() -> None:
             judge_kwargs["model"] = judge_model
         judge = LLMJudge(**judge_kwargs)
         scorers.append(judge)
-
-    print("Checking agent LLM connectivity...", flush=True)
-    try:
-        _check_agent_connectivity()
-    except Exception as exc:
-        print(f"ERROR: Agent LLM connectivity check failed: {exc}", file=sys.stderr)
-        print("Check OLLAMA_BASE_URL and OLLAMA_MODEL in your .env (no /v1 suffix for ChatOllama).",
-              file=sys.stderr)
-        sys.exit(1)
-    print("Agent LLM OK.", flush=True)
 
     if judge and not args.skip_judge_check:
         diag = _judge_diagnostics(judge)
@@ -129,13 +184,18 @@ def main() -> None:
         print("LLM judge OK.", flush=True)
 
     eval_ = Eval(
-        agent=agent,
+        agent=agent_fn,
         dataset=args.dataset,
         scorers=scorers,
         name=args.name,
         concurrency=args.concurrency,
     )
-    result = eval_.run()
+    try:
+        result = eval_.run()
+    finally:
+        if _tmp_dataset is not None:
+            _tmp_dataset.unlink(missing_ok=True)
+
     result.summary_print()
     result.save(args.output_dir)
     report = result.report_html(args.output_dir / result.run_id / "report.html")

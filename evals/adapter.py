@@ -7,9 +7,21 @@ state and returns the rendered report.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from graph.graph_builder import build_graph
+
+
+def _agent_model_name() -> str:
+    provider = os.getenv("LLM_PROVIDER", "ollama").lower()
+    if provider == "ollama":
+        model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+    elif provider == "huggingface":
+        model = os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct")
+    else:
+        model = "unknown"
+    return f"{provider}/{model}"
 
 _graph = None
 
@@ -54,5 +66,6 @@ def run(input: dict) -> dict:
             "sources": final_state.get("sources") or [],
             "critique": final_state.get("critique"),
             "iterations_used": final_state.get("iteration", 0),
+            "agent_model": _agent_model_name(),
         },
     }
