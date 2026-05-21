@@ -14,6 +14,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -160,6 +161,7 @@ def main() -> None:
 
     scorers = [MustMention(), MustNotMention(), MinSources()]
     judge = None
+    judge_model: str | None = None
     if not args.skip_judge:
         judge_model = args.judge_model
         if judge_model is None and args.judge_provider == "ollama":
@@ -169,6 +171,14 @@ def main() -> None:
             judge_kwargs["model"] = judge_model
         judge = LLMJudge(**judge_kwargs)
         scorers.append(judge)
+
+    # Give the replay function a descriptive identity so the report shows what was scored.
+    if args.from_outputs is not None:
+        judge_label = judge_model or "no-judge"
+        agent_fn.__qualname__ = (
+            f"replay[outputs={args.from_outputs.stem}, judge={judge_label}]"
+        )
+        agent_fn.__module__ = "evals"
 
     if judge and not args.skip_judge_check:
         diag = _judge_diagnostics(judge)
@@ -195,6 +205,18 @@ def main() -> None:
     finally:
         if _tmp_dataset is not None:
             _tmp_dataset.unlink(missing_ok=True)
+
+    # Replace the ULID run_id with a human-readable folder name.
+    date_str = result.started_at.strftime("%Y%m%d_%H%M%S")
+    if args.from_outputs is not None:
+        # Strip any leading YYYYMMDD_HHMMSS_ timestamp already in the outputs filename.
+        dataset_part = re.sub(r"^\d{8}_\d{6}_", "", args.from_outputs.stem) or args.from_outputs.stem
+    else:
+        dataset_part = Path(args.dataset).stem
+    judge_part = (
+        "judge-" + re.sub(r"[:/\\]", "-", judge_model) if judge_model else "no-judge"
+    )
+    result.run_id = f"{date_str}_{dataset_part}_{judge_part}"
 
     result.summary_print()
     result.save(args.output_dir)
