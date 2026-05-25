@@ -51,8 +51,10 @@ def run_searcher(state: ResearchState) -> dict:
     all_results: list[SearchResult] = []
     seen_urls: set[str] = set()
 
+    print(f"[searcher] running {len(state['search_queries'])} queries")
     for query in state["search_queries"]:
         results = web_search(query)
+        print(f"[searcher] query={query!r} → {len(results)} results")
         for result in results:
             if result["url"] in seen_urls:
                 continue

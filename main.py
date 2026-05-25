@@ -48,7 +48,7 @@ from graph.graph_builder import build_graph
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Multi-agent research assistant powered by LangGraph + Ollama"
+        description="The Goetic Tribunal — a multi-agent research working powered by LangGraph + Ollama"
     )
     parser.add_argument(
         "question",
@@ -80,9 +80,9 @@ def main():
     output_dir.mkdir(exist_ok=True)
     output_path = output_dir / f"{timestamp}_{slug}.md"
 
-    print(f"Research question: {args.question}")
-    print(f"Max iterations:    {args.max_iterations}")
-    print(f"Output path:       {output_path}")
+    print(f"Question to the Tribunal:         {args.question}")
+    print(f"Max challenges from the Censor:   {args.max_iterations}")
+    print(f"Testimony will be inscribed at:   {output_path}")
     print()
 
     graph = build_graph()
@@ -97,11 +97,11 @@ def main():
          "final_report": None,
          "messages": [],
      }
-    print("Running research graph...")
+    print("Opening the Circle...")
     final_state = graph.invoke(initial_state)
     report = final_state["final_report"]
     output_path.write_text(report, encoding="utf-8")
-    print(f"\nReport written to: {output_path}")
+    print(f"\nTestimony inscribed at: {output_path}")
 
 
 if __name__ == "__main__":
