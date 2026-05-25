@@ -21,6 +21,7 @@ from evals.adapter import run as agent
 
 def _check_agent_connectivity() -> None:
     from langchain_core.messages import HumanMessage
+
     from llm.ollama_client import get_llm
 
     llm = get_llm()

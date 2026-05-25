@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+
 from langchain_core.messages import AIMessage
 
 
