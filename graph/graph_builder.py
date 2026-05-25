@@ -27,16 +27,16 @@ Hint — conditional edge syntax:
   The routing function must return one of the keys in the mapping dict.
 """
 
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 
-from graph.state import ResearchState
-from graph.edges import should_revise_or_write
-from agents.orchestrator import run_orchestrator
-from agents.searcher import run_searcher
-from agents.reader import run_reader
 from agents.critic import run_critic
+from agents.orchestrator import run_orchestrator
+from agents.reader import run_reader
 from agents.refiner import run_refiner
+from agents.searcher import run_searcher
 from agents.writer import run_writer
+from graph.edges import should_revise_or_write
+from graph.state import ResearchState
 
 
 def build_graph():

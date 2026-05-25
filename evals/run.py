@@ -88,6 +88,7 @@ def _make_replay_agent(outputs_path: Path):
 def _check_agent_connectivity() -> None:
     """Smoke-test the agent's LLM before running any cases."""
     from langchain_core.messages import HumanMessage
+
     from llm.ollama_client import get_llm
 
     llm = get_llm()

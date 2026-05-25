@@ -17,6 +17,7 @@ tags:
 
 # Multi-Agent Research Assistant
 
+[![Tests](https://github.com/dominguerilla/research-agent/actions/workflows/test.yml/badge.svg)](https://github.com/dominguerilla/research-agent/actions/workflows/test.yml)
 [![Try it on HF Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/c-dom/researcher)
 [![GitHub](https://img.shields.io/badge/GitHub-Source-black?logo=github)](https://github.com/dominguerilla/research-agent)
 

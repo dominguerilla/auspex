@@ -60,13 +60,11 @@ def run_searcher(state: ResearchState) -> dict:
                 continue
             seen_urls.add(result["url"])
             all_results.append(
-                    SearchResult(
-                        title=result["title"],
-                        url=result["url"],
-                        snippet=result["snippet"]
-                        )
-                    )
-
-        
+                SearchResult(
+                    title=result["title"],
+                    url=result["url"],
+                    snippet=result["snippet"],
+                )
+            )
 
     return {"search_results": all_results}

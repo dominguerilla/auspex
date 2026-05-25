@@ -42,9 +42,14 @@ invoke() hint:
 """
 
 import argparse
+import logging
 from datetime import datetime
 from pathlib import Path
+
 from graph.graph_builder import build_graph
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(

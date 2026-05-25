@@ -28,9 +28,9 @@ State fields written: critique (CritiqueResult), iteration (incremented)
 
 from pathlib import Path
 
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
-from graph.state import ResearchState, CritiqueResult
+from graph.state import CritiqueResult, ResearchState
 from llm.ollama_client import get_llm
 
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "critic.txt"
@@ -81,7 +81,7 @@ def run_critic(state: ResearchState) -> dict:
 def find_verdict(lines: list[str]) -> tuple[bool, int | None]:
     passed = False
     verdict_line = None
-    for i,line in enumerate(lines):
+    for i, line in enumerate(lines):
         upper = line.strip().upper()
         if upper == "PASSED":
             passed = True

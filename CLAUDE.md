@@ -64,4 +64,4 @@ START → orchestrator → searcher → reader → critic → (conditional) → 
 
 ## Implementation Status
 
-All agents, tools, graph wiring, and `main.py` are implemented. One minor TODO remains in `agents/searcher.py`. `LEARNING.md` contains concept explanations and vocabulary for the patterns used.
+All agents, tools, graph wiring, and `main.py` are fully implemented. `LEARNING.md` contains concept explanations and vocabulary for the patterns used.
