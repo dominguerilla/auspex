@@ -27,6 +27,7 @@ flows top-to-bottom on every re-run (Streamlit's model).
 import os
 import re
 from datetime import datetime
+from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -38,6 +39,10 @@ load_dotenv()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Page config + custom CSS injection
+#
+# All visual styling lives in styles.css next to this file. Font <link> tags
+# stay inline below (HTML, not CSS). Editing styles.css is a real CSS-file
+# experience: editor highlighting, Prettier/stylelint, clean diffs.
 # ─────────────────────────────────────────────────────────────────────────────
 
 st.set_page_config(
@@ -48,571 +53,30 @@ st.set_page_config(
 )
 
 
-# All visual styling lives here. Streamlit's native widgets are targeted by
-# their data-testid selectors; everything else is plain HTML emitted by
-# st.markdown(unsafe_allow_html=True).
-CUSTOM_CSS = """
+FONT_LINKS = """
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-
-<style>
-:root {
-    --page:        #f4ecd8;
-    --page-warm:   #ece1c4;
-    --ink:         #2a1810;
-    --ink-fade:    #6b5440;
-    --accent:      #8b1a1a;
-    --accent-lit:  #c14848;
-    --shrine:      #1c130b;
-}
-
-/* ── Strip Streamlit's default chrome ─────────────────────────────────── */
-#MainMenu, header[data-testid="stHeader"], footer { display: none !important; }
-[data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
-[data-testid="stStatusWidget"] { display: none !important; }
-.stDeployButton { display: none !important; }
-
-/* ── Page surface ────────────────────────────────────────────────────── */
-html, body, [data-testid="stAppViewContainer"], .stApp {
-    background: var(--page) !important;
-    color: var(--ink) !important;
-    font-family: 'EB Garamond', serif !important;
-    background-image:
-        radial-gradient(ellipse at 30% 10%, rgba(232, 220, 192, 0.6) 0%, transparent 40%),
-        radial-gradient(ellipse at 80% 80%, rgba(232, 220, 192, 0.4) 0%, transparent 50%);
-}
-[data-testid="stMain"] {
-    padding-top: 0 !important;
-}
-[data-testid="stMainBlockContainer"], .block-container {
-    max-width: 1200px !important;
-    padding: 40px 64px 80px !important;
-}
-@media (max-width: 900px) {
-    [data-testid="stMainBlockContainer"], .block-container { padding: 24px 20px 60px !important; }
-}
-
-/* All text inherits the page's ink colour and Garamond stack. */
-[data-testid="stMarkdownContainer"], [data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] li, .stMarkdown, .stMarkdown p,
-[data-testid="stText"] {
-    color: var(--ink) !important;
-    font-family: 'EB Garamond', serif !important;
-}
-
-/* ── Top strip ───────────────────────────────────────────────────────── */
-.gt-topstrip {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    gap: 24px;
-    padding-bottom: 22px;
-    border-bottom: 1px solid var(--ink);
-    margin-bottom: 56px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.25em;
-    color: var(--ink-fade);
-    text-transform: uppercase;
-}
-.gt-topstrip a { color: var(--ink-fade); text-decoration: none; }
-.gt-topstrip a:hover { color: var(--ink); }
-.gt-topstrip .gt-status-on  { color: var(--accent); }
-.gt-topstrip .gt-status-off { color: var(--ink-fade); }
-.gt-topstrip .gt-status-done { color: var(--ink); }
-
-/* ── Hero ────────────────────────────────────────────────────────────── */
-.gt-hero { text-align: center; margin-bottom: 48px; }
-.gt-hero-ornament {
-    font-size: 16px; letter-spacing: 1em;
-    color: var(--ink-fade); margin-bottom: 14px;
-}
-.gt-hero h1 {
-    font-family: 'Cinzel', serif !important;
-    font-size: 52px; font-weight: 500;
-    letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--ink) !important;
-    margin: 0 0 14px; line-height: 1;
-}
-.gt-hero-sub {
-    font-family: 'EB Garamond', serif;
-    font-size: 18px; font-style: italic;
-    color: var(--ink-fade); letter-spacing: 0.04em;
-}
-.gt-hero-blurb {
-    max-width: 680px; margin: 26px auto 0;
-    font-size: 16px; color: var(--ink-fade);
-    line-height: 1.55;
-}
-
-/* ── Epigraph (the posed question, shown during/after a run) ─────────── */
-.gt-epigraph {
-    max-width: 880px; margin: 0 auto 56px;
-    display: grid; grid-template-columns: 120px 1fr;
-    gap: 32px; align-items: start;
-    padding-bottom: 36px;
-    border-bottom: 1px solid rgba(42, 24, 16, 0.2);
-}
-.gt-dropcap {
-    font-family: 'Cinzel', serif;
-    font-size: 108px; font-weight: 500;
-    line-height: 0.85; color: var(--accent);
-    text-align: right; letter-spacing: -0.02em;
-}
-.gt-question-text {
-    font-family: 'EB Garamond', serif;
-    font-size: 22px; line-height: 1.45;
-    color: var(--ink); font-style: italic;
-    text-wrap: pretty;
-}
-.gt-question-meta {
-    margin-top: 14px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.2em;
-    color: var(--ink-fade); text-transform: uppercase;
-    font-style: normal;
-}
-
-/* ── Circle of Spirits ───────────────────────────────────────────────── */
-.gt-circle-section {
-    display: grid;
-    grid-template-columns: 1fr 480px 1fr;
-    align-items: center;
-    gap: 32px;
-    margin: 0 auto 48px;
-    max-width: 1100px;
-}
-.gt-circle-side {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    color: var(--ink-fade);
-    line-height: 1.9;
-    text-transform: uppercase;
-}
-.gt-circle-side.left { text-align: right; }
-.gt-circle-side .gt-active { color: var(--accent); }
-.gt-circle-side .gt-done { color: var(--ink); }
-.gt-circle-svg { display: flex; justify-content: center; color: var(--ink); }
-.gt-circle-caption {
-    text-align: center;
-    font-family: 'Cinzel', serif;
-    font-size: 12px;
-    letter-spacing: 0.4em;
-    color: var(--ink-fade);
-    text-transform: uppercase;
-    margin: -28px 0 56px;
-}
-
-/* ── Invocation form (idle state) ────────────────────────────────────── */
-.gt-form-wrap {
-    max-width: 880px;
-    margin: 0 auto;
-}
-.gt-pose-label {
-    font-family: 'Cinzel', serif;
-    font-size: 13px;
-    letter-spacing: 0.3em;
-    color: var(--ink);
-    text-transform: uppercase;
-    margin-bottom: 14px;
-    display: flex; align-items: center; gap: 12px;
-}
-.gt-pose-label .gt-mark { color: var(--accent); }
-.gt-submit-row {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 16px; margin-top: 22px;
-}
-.gt-submit-hint {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing: 0.16em;
-    color: var(--ink-fade); text-transform: uppercase;
-}
-
-/* ── Reskin Streamlit's slider ───────────────────────────────────────── */
-[data-testid="stSlider"] label p {
-    font-family: 'Cinzel', serif !important;
-    font-size: 11px !important;
-    letter-spacing: 0.28em !important;
-    color: var(--ink-fade) !important;
-    text-transform: uppercase !important;
-}
-[data-testid="stSlider"] [data-baseweb="slider"] > div > div { background: var(--accent) !important; }
-[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] {
-    background: var(--accent) !important;
-    border: 2px solid var(--page) !important;
-    box-shadow: 0 0 0 1px var(--accent), 0 2px 4px rgba(0,0,0,0.15) !important;
-}
-[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] + div {
-    background: var(--accent) !important;
-    color: var(--page) !important;
-    font-family: 'Cinzel', serif !important;
-    letter-spacing: 0.08em !important;
-}
-[data-testid="stSlider"] [data-testid="stTickBarMin"],
-[data-testid="stSlider"] [data-testid="stTickBarMax"] {
-    font-family: 'JetBrains Mono', monospace !important;
-    color: var(--ink-fade) !important;
-    font-size: 10px !important;
-}
-
-/* ── Reskin Streamlit's text area ────────────────────────────────────── */
-[data-testid="stTextArea"] label { display: none !important; }
-[data-testid="stTextArea"] textarea {
-    background: rgba(232, 220, 192, 0.5) !important;
-    border: 1px solid rgba(42, 24, 16, 0.3) !important;
-    border-left: 3px solid var(--accent) !important;
-    border-radius: 0 !important;
-    color: var(--ink) !important;
-    font-family: 'EB Garamond', serif !important;
-    font-size: 19px !important;
-    line-height: 1.5 !important;
-    padding: 22px 28px !important;
-    min-height: 140px !important;
-    box-shadow: none !important;
-    font-style: italic !important;
-}
-[data-testid="stTextArea"] textarea:focus {
-    border-color: rgba(42, 24, 16, 0.5) !important;
-    border-left-color: var(--accent) !important;
-    outline: none !important;
-    box-shadow: inset 0 0 0 1px rgba(139, 26, 26, 0.15) !important;
-}
-[data-testid="stTextArea"] textarea::placeholder {
-    color: var(--ink-fade) !important;
-    opacity: 0.7 !important;
-}
-
-/* ── Reskin Streamlit's button (primary) ─────────────────────────────── */
-[data-testid="stBaseButton-primary"],
-[data-testid="stButton"] button[kind="primary"],
-[data-testid="stButton"] button {
-    background: var(--accent) !important;
-    color: var(--page) !important;
-    border: 1px solid var(--accent) !important;
-    border-radius: 0 !important;
-    padding: 12px 36px !important;
-    font-family: 'Cinzel', serif !important;
-    font-size: 13px !important;
-    letter-spacing: 0.3em !important;
-    text-transform: uppercase !important;
-    font-weight: 600 !important;
-    box-shadow: 0 2px 0 var(--ink) !important;
-    transition: transform .08s ease !important;
-}
-[data-testid="stButton"] button:hover {
-    background: var(--accent-lit) !important;
-    border-color: var(--accent-lit) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: 0 3px 0 var(--ink) !important;
-}
-[data-testid="stButton"] button:active {
-    transform: translateY(1px) !important;
-    box-shadow: 0 1px 0 var(--ink) !important;
-}
-[data-testid="stButton"] button:disabled {
-    background: var(--ink-fade) !important;
-    border-color: var(--ink-fade) !important;
-    color: rgba(244, 236, 216, 0.7) !important;
-    box-shadow: none !important;
-    cursor: not-allowed !important;
-}
-[data-testid="stDownloadButton"] button {
-    background: var(--page) !important;
-    color: var(--ink) !important;
-    border: 1px solid var(--ink) !important;
-    border-radius: 0 !important;
-    padding: 10px 28px !important;
-    font-family: 'Cinzel', serif !important;
-    font-size: 12px !important;
-    letter-spacing: 0.28em !important;
-    text-transform: uppercase !important;
-    box-shadow: none !important;
-}
-[data-testid="stDownloadButton"] button:hover {
-    background: var(--ink) !important;
-    color: var(--page) !important;
-}
-
-/* ── The Working log (marginalia entries) ────────────────────────────── */
-.gt-log-wrap { max-width: 960px; margin: 0 auto; }
-.gt-log-title {
-    display: flex; align-items: baseline; gap: 14px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--ink);
-    margin-bottom: 28px;
-}
-.gt-log-title h2 {
-    font-family: 'Cinzel', serif !important;
-    font-size: 18px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--ink) !important;
-    margin: 0 !important;
-    font-weight: 500 !important;
-}
-.gt-log-progress {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    color: var(--ink-fade);
-    margin-left: auto;
-}
-
-.gt-entry {
-    display: grid;
-    grid-template-columns: 120px 1fr 180px;
-    gap: 28px;
-    padding: 30px 0;
-    border-top: 1px dashed rgba(42, 24, 16, 0.2);
-}
-.gt-entry:first-of-type { border-top: none; }
-.gt-entry.pending { opacity: 0.4; }
-.gt-entry-sigil {
-    text-align: center;
-    color: var(--ink);
-}
-.gt-entry.active .gt-entry-sigil { color: var(--accent); }
-.gt-entry.pending .gt-entry-sigil { color: var(--ink-fade); }
-.gt-entry-sigil svg { margin-bottom: 8px; }
-.gt-entry-numeral {
-    font-family: 'Cinzel', serif;
-    font-size: 11px;
-    letter-spacing: 0.3em;
-}
-.gt-entry-name {
-    font-family: 'Cinzel', serif;
-    font-size: 18px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--ink);
-    margin-bottom: 4px;
-    display: flex; align-items: center; gap: 12px;
-}
-.gt-entry.active .gt-entry-name { color: var(--accent); }
-.gt-entry.pending .gt-entry-name { color: var(--ink-fade); }
-.gt-badge {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9px;
-    padding: 2px 8px;
-    letter-spacing: 0.24em;
-    border-radius: 2px;
-}
-.gt-badge-active { background: var(--accent); color: var(--page); }
-.gt-badge-sealed { color: var(--ink-fade); }
-.gt-entry-verb {
-    font-style: italic;
-    font-size: 17px;
-    color: var(--ink-fade);
-    margin-bottom: 14px;
-}
-.gt-entry-body {
-    font-family: 'EB Garamond', serif;
-    font-size: 17px;
-    line-height: 1.6;
-    color: var(--ink);
-    text-wrap: pretty;
-}
-.gt-entry-footnotes {
-    margin-top: 16px;
-    padding: 12px 16px;
-    background: rgba(232, 220, 192, 0.5);
-    border-left: 2px solid var(--ink-fade);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    line-height: 1.7;
-    color: var(--ink);
-    letter-spacing: 0.02em;
-    word-break: break-all;
-}
-.gt-entry.active .gt-entry-footnotes {
-    border-left-color: var(--accent);
-}
-.gt-entry-footnotes .gt-ix { color: var(--ink-fade); margin-right: 8px; }
-.gt-entry-gloss {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    color: var(--ink-fade);
-    text-transform: uppercase;
-    line-height: 1.9;
-    padding-top: 8px;
-}
-.gt-entry.active .gt-entry-gloss .gt-hot { color: var(--accent); }
-
-/* ── Testimony (complete state) ──────────────────────────────────────── */
-.gt-testimony-wrap {
-    max-width: 1100px;
-    margin: 64px auto 0;
-}
-.gt-testimony-title {
-    display: flex; align-items: baseline; gap: 14px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--ink);
-    margin-bottom: 28px;
-}
-.gt-testimony-title h2 {
-    font-family: 'Cinzel', serif !important;
-    font-size: 24px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--ink) !important;
-    margin: 0 !important;
-    font-weight: 500 !important;
-}
-.gt-testimony-grid {
-    display: grid;
-    grid-template-columns: 1fr 280px;
-    gap: 56px;
-    align-items: start;
-}
-@media (max-width: 900px) {
-    .gt-testimony-grid { grid-template-columns: 1fr; }
-}
-.gt-testimony-body {
-    font-family: 'EB Garamond', serif;
-    font-size: 18px;
-    line-height: 1.65;
-    color: var(--ink);
-    text-wrap: pretty;
-}
-.gt-testimony-body h1, .gt-testimony-body h2, .gt-testimony-body h3 {
-    font-family: 'Cinzel', serif !important;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--ink) !important;
-    font-weight: 500 !important;
-}
-.gt-testimony-body h1 { font-size: 28px; margin: 28px 0 16px; }
-.gt-testimony-body h2 { font-size: 22px; margin: 28px 0 12px; }
-.gt-testimony-body h3 { font-size: 17px; margin: 22px 0 10px; }
-.gt-testimony-body p { margin: 0 0 14px; }
-.gt-testimony-body strong { color: var(--ink); }
-.gt-testimony-body em { color: var(--ink); }
-.gt-testimony-body a {
-    color: var(--accent);
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-}
-.gt-testimony-body code {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85em;
-    background: rgba(232, 220, 192, 0.6);
-    padding: 1px 6px;
-    border-radius: 2px;
-}
-.gt-testimony-body blockquote {
-    border-left: 3px solid var(--accent);
-    padding: 4px 18px;
-    margin: 18px 0;
-    font-style: italic;
-    color: var(--ink-fade);
-}
-.gt-testimony-body ul, .gt-testimony-body ol {
-    padding-left: 24px;
-    margin: 12px 0 16px;
-}
-.gt-testimony-body li { margin-bottom: 6px; }
-
-.gt-sources-rail {
-    position: sticky; top: 32px;
-    padding: 22px 0 0;
-    border-top: 1px solid var(--ink);
-}
-.gt-sources-label {
-    font-family: 'Cinzel', serif;
-    font-size: 12px;
-    letter-spacing: 0.3em;
-    color: var(--ink);
-    text-transform: uppercase;
-    margin-bottom: 18px;
-}
-.gt-source {
-    padding: 12px 0;
-    border-top: 1px dashed rgba(42, 24, 16, 0.2);
-    font-size: 13px;
-    line-height: 1.5;
-}
-.gt-source:first-of-type { border-top: none; padding-top: 0; }
-.gt-source-num {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    color: var(--accent);
-    margin-right: 8px;
-}
-.gt-source-url {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    color: var(--ink-fade);
-    word-break: break-all;
-    display: block;
-    margin-top: 2px;
-}
-
-/* ── Footer caveat ───────────────────────────────────────────────────── */
-.gt-caveat {
-    max-width: 880px;
-    margin: 64px auto 0;
-    padding: 20px 0 0;
-    border-top: 1px solid var(--ink);
-    font-family: 'EB Garamond', serif;
-    font-style: italic;
-    font-size: 14px;
-    color: var(--ink-fade);
-    text-align: center;
-    line-height: 1.6;
-}
-
-/* ── Error panel ─────────────────────────────────────────────────────── */
-.gt-error {
-    max-width: 880px;
-    margin: 32px auto;
-    padding: 22px 28px;
-    border: 1px solid var(--accent);
-    border-left: 3px solid var(--accent);
-    background: rgba(139, 26, 26, 0.06);
-    font-family: 'EB Garamond', serif;
-}
-.gt-error-tag {
-    font-family: 'Cinzel', serif;
-    font-size: 13px;
-    letter-spacing: 0.3em;
-    color: var(--accent);
-    text-transform: uppercase;
-    margin-bottom: 10px;
-}
-.gt-error-body { font-size: 16px; line-height: 1.5; color: var(--ink); }
-
-/* ── Stream cursor on active entry body ──────────────────────────────── */
-.gt-cursor {
-    display: inline-block;
-    width: 10px; height: 18px;
-    background: var(--accent);
-    margin-left: 4px;
-    vertical-align: -3px;
-    animation: gt-blink 1s steps(2) infinite;
-}
-@keyframes gt-blink { 50% { opacity: 0; } }
-
-/* Hide the empty space Streamlit reserves for the sidebar collapsed handle. */
-[data-testid="stSidebarCollapsedControl"] { display: none !important; }
-
-/* Inline hint paragraph below idle slider. */
-.gt-slider-hint {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    color: var(--ink-fade);
-    letter-spacing: 0.04em;
-    line-height: 1.5;
-    margin-top: 4px;
-    font-style: italic;
-}
-</style>
 """
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
+
+@st.cache_data
+def _load_css() -> str:
+    """Read styles.css from disk and wrap it in a <style> tag for st.markdown.
+
+    Cached so the file is read once per server boot (not on every rerun).
+    If you edit styles.css while the dev server is running, hit "Rerun" in
+    the Streamlit toolbar or restart `streamlit run` to pick up the change.
+    """
+    css = (Path(__file__).parent / "styles.css").read_text(encoding="utf-8")
+    # The leading "\n\n" + trailing "\n" matter — Streamlit's markdown parser
+    # only treats <style>...</style> as a raw-HTML block when the opening tag
+    # is on its own line with a blank line above it. Without these newlines
+    # the CSS renders as paragraph text on the page.
+    return f"\n\n<style>\n{css}\n</style>\n"
+
+
+st.markdown(FONT_LINKS + _load_css(), unsafe_allow_html=True)
 
 
 def _html(s: str) -> str:
@@ -885,7 +349,20 @@ def render_entry(
         badge = '<span class="gt-badge gt-badge-sealed">· SEALED</span>'
 
     sigil = _sigil(s["key"], 56)
+    sigil_sm = _sigil(s["key"], 24)
     fn = f'<div class="gt-entry-footnotes">{footnotes_html}</div>' if footnotes_html else ""
+
+    # Phone-only: tucked behind a <details> in place of the right gloss column.
+    # CSS (styles.css @media block) hides this on desktop and shows it under
+    # the body on narrow viewports. Skip for pending entries (nothing to show).
+    trace = ""
+    if gloss_html and state != "pending":
+        trace = (
+            f'<details class="gt-entry-trace">'
+            f'<summary>trace</summary>'
+            f'<div>{gloss_html}</div>'
+            f'</details>'
+        )
 
     return _html(f"""
     <div class="gt-entry {state}">
@@ -894,10 +371,14 @@ def render_entry(
             <div class="gt-entry-numeral">{ROMAN[idx]}</div>
         </div>
         <div>
-            <div class="gt-entry-name">{s["name"]} {badge}</div>
+            <div class="gt-entry-name">
+                <span class="gt-entry-sigil-inline">{sigil_sm}<span class="gt-entry-numeral">{ROMAN[idx]}</span></span>
+                <span>{s["name"]}</span> {badge}
+            </div>
             <div class="gt-entry-verb">{s["verb"]}</div>
             <div class="gt-entry-body">{body_html}</div>
             {fn}
+            {trace}
         </div>
         <div class="gt-entry-gloss">{gloss_html}</div>
     </div>
@@ -1019,14 +500,12 @@ def extract_sources(state_sources, final_report: str) -> list[dict]:
         seen = set()
         for m in re.finditer(r'\[([^\]]+)\]\((https?://[^\)\s]+)\)', final_report):
             url = m.group(2)
-            if url in seen:
-                continue
+            if url in seen: continue
             seen.add(url)
             out.append({"title": m.group(1), "url": url})
         for m in re.finditer(r'(?<![\(\[])\b(https?://[^\s\)\]]+)', final_report):
             url = m.group(1).rstrip('.,;:')
-            if url in seen:
-                continue
+            if url in seen: continue
             seen.add(url)
             out.append({"title": "", "url": url})
     return out
