@@ -21,8 +21,6 @@ tags:
 [![Try it on HF Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/c-dom/researcher)
 [![GitHub](https://img.shields.io/badge/GitHub-Source-black?logo=github)](https://github.com/dominguerilla/research-agent)
 
-*This is a small pet project to learn the basics of some common agentic LLM technologies. Claude Code created the scaffolding + test suites — I am the one that implemented the stubs.*
-
 An agentic system built with **LangGraph** and **Ollama/HuggingFace** that researches topics by orchestrating a graph of specialised agents.
 
 ## Architecture
@@ -50,6 +48,8 @@ START → [orchestrator] → [searcher] → [reader] → [critic]
 
 ## Setup
 
+Requires **Python 3.10+**.
+
 ```bash
 # 1. Create and activate a virtual environment
 python -m venv .venv
@@ -72,7 +72,8 @@ ollama pull qwen2.5:3b
 Set in `.env`:
 ```
 LLM_PROVIDER=ollama
-OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_BASE_URL=http://localhost:11434   # default
+OLLAMA_MODEL=qwen2.5:3b                 # or qwen2.5:7b for better quality
 ```
 
 ### HuggingFace (cloud / HF Spaces)
@@ -81,7 +82,14 @@ Set in `.env`:
 ```
 LLM_PROVIDER=huggingface
 HF_TOKEN=<your HF access token>
-HF_MODEL=meta-llama/Llama-3.1-8B-Instruct
+HF_MODEL=meta-llama/Llama-3.1-8B-Instruct   # any HF Inference API-compatible instruct model
+```
+
+Optionally enable [LangSmith](https://smith.langchain.com/) tracing:
+```
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=your_key_here
+LANGCHAIN_PROJECT=researcher
 ```
 
 ## Usage
@@ -92,7 +100,7 @@ python main.py "How does transformer attention work?" --max-iterations 3
 python main.py "Best practices for Kubernetes networking" --output-dir reports/
 ```
 
-Reports are written to `output/<timestamp>_<slug>.md`.
+The CLI prints progress as it runs, then writes a Markdown report to `output/<timestamp>_<slug>.md` containing structured findings and inline source links.
 
 ### Streamlit Web UI
 
@@ -120,14 +128,3 @@ pytest -x
 
 Tests live in `tests/` and use fixtures from `tests/conftest.py` — `mock_llm` (a `MagicMock` ChatOllama) and `base_state` (a zeroed `ResearchState` dict).
 
-## Switching Models
-
-Change `LLM_PROVIDER` and the corresponding model variable in `.env` — no code changes required:
-
-**Ollama** (`LLM_PROVIDER=ollama`):
-- `qwen2.5:3b` — fast, good for development
-- `qwen2.5:7b` — better quality for demos
-
-**HuggingFace** (`LLM_PROVIDER=huggingface`):
-- `meta-llama/Llama-3.1-8B-Instruct` — default, good general-purpose model
-- Any HF Inference API-compatible instruct model

@@ -26,3 +26,4 @@ htmlcov/
 
 # evals
 evals/runs/
+evals/outputs/

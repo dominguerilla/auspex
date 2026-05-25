@@ -32,11 +32,9 @@ Safe parsing hint:
       return []
 """
 
-import ast
+from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 
-from langchain_community.tools import DuckDuckGoSearchResults
-
-_tool = DuckDuckGoSearchResults()
+_wrapper = DuckDuckGoSearchAPIWrapper()
 
 
 def web_search(query: str) -> list[dict]:
@@ -55,8 +53,7 @@ def web_search(query: str) -> list[dict]:
         Returns empty list on error.
     """
     try:
-        raw = _tool.run(query)
-        items = ast.literal_eval(raw)
+        items = _wrapper.results(query, max_results=5)
         return [
             {
                 'title': item.get('title', ''),
@@ -65,5 +62,6 @@ def web_search(query: str) -> list[dict]:
             }
             for item in items
         ]
-    except Exception:
+    except Exception as e:
+        print(f"[web_search] query={query!r} failed: {e}")
         return []
