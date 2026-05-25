@@ -1019,12 +1019,14 @@ def extract_sources(state_sources, final_report: str) -> list[dict]:
         seen = set()
         for m in re.finditer(r'\[([^\]]+)\]\((https?://[^\)\s]+)\)', final_report):
             url = m.group(2)
-            if url in seen: continue
+            if url in seen: 
+                continue
             seen.add(url)
             out.append({"title": m.group(1), "url": url})
         for m in re.finditer(r'(?<![\(\[])\b(https?://[^\s\)\]]+)', final_report):
             url = m.group(1).rstrip('.,;:')
-            if url in seen: continue
+            if url in seen: 
+                continue
             seen.add(url)
             out.append({"title": "", "url": url})
     return out
