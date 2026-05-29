@@ -31,6 +31,7 @@ State fields written: sources
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage
@@ -63,22 +64,33 @@ def run_reader(state: ResearchState) -> dict:
     sources: list[ScrapedSource] = []
     logger.info("search_results count: %d", len(state["search_results"]))
 
-    for result in state["search_results"]:
+    def _process(result) -> ScrapedSource | None:
         try:
             raw_text = scrape_url(result["url"])
         except Exception as e:
             logger.warning("scrape failed for %s: %s — skipping", result["url"], e)
-            continue
+            return None
 
         if not raw_text:
-            continue
+            return None
 
         try:
-            prompt = prompt_template.format(research_question=state["research_question"], content=raw_text[:4000])
-            summary = llm.invoke([HumanMessage(content=prompt)]).content
-            sources.append(ScrapedSource(url=result["url"], summary=summary, raw_length=len(raw_text)))
+            prompt = prompt_template.format(
+                research_question=state["research_question"],
+                content=raw_text[:4000],
+            )
+            summary = str(llm.invoke([HumanMessage(content=prompt)]).content)
+            return ScrapedSource(url=result["url"], summary=summary, raw_length=len(raw_text))
         except Exception as e:
             logger.warning("LLM summarisation failed for %s: %s", result["url"], e)
+            return None
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {pool.submit(_process, r): r for r in state["search_results"]}
+        for future in as_completed(futures):
+            result = future.result()
+            if result is not None:
+                sources.append(result)
 
     logger.info("sources produced: %d", len(sources))
-    return {"sources" : sources}
+    return {"sources": sources}

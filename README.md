@@ -3,10 +3,8 @@ title: Multi-Agent Research Assistant
 emoji: 🔍
 colorFrom: blue
 colorTo: purple
-sdk: streamlit
-sdk_version: 1.41.1
-python_version: "3.10"
-app_file: streamlit_app.py
+sdk: docker
+app_port: 7860
 pinned: false
 short_description: LangGraph multi-agent research pipeline
 tags:
@@ -102,11 +100,53 @@ python main.py "Best practices for Kubernetes networking" --output-dir reports/
 
 The CLI prints progress as it runs, then writes a Markdown report to `output/<timestamp>_<slug>.md` containing structured findings and inline source links.
 
-### Streamlit Web UI
+### Web UI (FastAPI + single-flow frontend)
+
+The deployed app is a FastAPI server (`app.py`) that drives the React single-flow
+prototype in `frontend/`. Run it locally with:
+
+```bash
+uvicorn app:app --reload --port 7860
+```
+
+Then open <http://localhost:7860>. The flow:
+
+1. Pose a question, choose max challenges, submit.
+2. The Circle animates as each agent (orchestrator → searcher → reader → critic → optional refiner → writer) completes.
+3. On completion, the report opens from the center of the Circle and can be shared via the `/r/{job_id}` URL.
+
+The job runs server-side and persists across tab backgrounding / phone lock. Each
+job's `job_id` is stored in `sessionStorage` so a refresh resumes the same job,
+and the URL is rewritten to `/r/{job_id}` so the address bar is itself a shareable
+link. Completed reports are persisted to `jobs.db` (SQLite on the container's
+ephemeral disk) and stay available until the next redeployment.
+
+### Streamlit Web UI (legacy, local only)
 
 ```bash
 streamlit run streamlit_app.py
 ```
+
+The Streamlit UI is kept for local debugging / agent inspection. It is not
+deployed to the HF Space — the Space runs `app.py`.
+
+## Deployment (HF Spaces, Docker SDK)
+
+This Space is configured with `sdk: docker` (see the frontmatter above). HF
+builds the `Dockerfile`, exposes port 7860, and routes traffic to FastAPI.
+
+Required Space secrets (set in the Space's *Settings → Variables and secrets*):
+
+| Secret | Value |
+|---|---|
+| `HF_TOKEN` | A Hugging Face access token with Inference API read access |
+
+The Dockerfile pre-sets `LLM_PROVIDER=huggingface` and `HF_MODEL=Qwen/Qwen2.5-7B-Instruct`.
+Override `HF_MODEL` via Space variables if you want to try a different model.
+
+Notes:
+- The container's filesystem is ephemeral on the free tier — `jobs.db` is wiped on every redeploy. The UI surfaces this in the "About this report" rail.
+- The Space sleeps after ~48h of no traffic; the first request after sleep takes ~30s to warm up.
 
 ## Testing
 

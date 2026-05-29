@@ -29,6 +29,7 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage
 
 from graph.state import ResearchState
+from llm.contract import CITATION_FORMAT_HINT
 from llm.ollama_client import get_llm
 
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "writer.txt"
@@ -58,7 +59,8 @@ def run_writer(state: ResearchState) -> dict:
     prompt = prompt_template.format(
         research_question=state["research_question"],
         sources_text=sources_text,
-        critique_feedback=critique_feedback
+        critique_feedback=critique_feedback,
+        citation_format=CITATION_FORMAT_HINT,
     )
     report_text = llm.invoke([HumanMessage(content=prompt)]).content
     return {"final_report": report_text}
