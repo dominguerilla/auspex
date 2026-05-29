@@ -11,6 +11,8 @@
  * The Circle is always mounted; phase-keyed CSS vars scale and fade it.
  */
 
+// Pre-firing flavor text for each spirit's detail card.
+// Only `body` is used — footnotes/meta come from live node_complete payloads.
 const FLOW_CONTENT = {
   defaultQuestion: "",
   spirits: {
@@ -18,34 +20,11 @@ const FLOW_CONTENT = {
       body:
         "The question is broken into four search-queries. The Magister sets the frame of " +
         "the ritual and binds the Familiar to its path.",
-      footnotes:
-        "Q.01 — origin \"four archangels\" directional correspondences medieval grimoire\n" +
-        "Q.02 — Raphael Michael Gabriel Uriel cardinal directions elements history\n" +
-        "Q.03 — \"Key of Solomon\" archangel cardinal direction earliest source\n" +
-        "Q.04 — Agrippa De Occulta Philosophia archangel attribution",
-      meta: [
-        ["queries", "4"],
-        ["temp", "0.30"],
-        ["tokens", "142"],
-        ["elapsed", "00:04"],
-      ],
     },
     familiar: {
       body:
-        "The Familiar rides out across the noosphere. Eleven testimonies are returned; " +
-        "two are unreachable and discarded.",
-      footnotes:
-        "↳ en.wikipedia.org/wiki/Archangel\n" +
-        "↳ esotericarchives.com/agrippa/agrippa3.htm\n" +
-        "↳ sacred-texts.com/grim/lks/lks02.htm\n" +
-        "↳ plato.stanford.edu/entries/angels\n" +
-        "↳ jstor.org/stable/3258891 · + 6 further sources",
-      meta: [
-        ["fetched", "14"],
-        ["admitted", "11"],
-        ["kb", "184.2"],
-        ["elapsed", "00:12"],
-      ],
+        "The Familiar rides out across the noosphere. Testimonies are returned; " +
+        "unreachable sources are discarded.",
     },
     scribe: {
       body:
@@ -53,103 +32,22 @@ const FLOW_CONTENT = {
         "Cornelius Agrippa's De Occulta Philosophia (Book III, ch. 24, 1531). Earlier, partial " +
         "schemata appear in the Hebrew Sefer Raziel HaMalakh manuscript tradition, though the " +
         "specific Raphael / East pairing is not yet fixed there.",
-      footnotes: "++NOTITIA++ The Scribe is engaged. Streaming. The Censor stands by.",
-      meta: [
-        ["tokens", "1,847"],
-        ["sources", "11"],
-        ["citations", "8"],
-        ["elapsed", "00:22"],
-      ],
     },
     censor: {
       body:
-        "Two of the eight citations are challenged. The Magister is consulted; the working is " +
+        "Citations are challenged. The Magister is consulted; the working is " +
         "rectified and re-submitted to the Censor's judgement.",
-      footnotes:
-        "C.01 — citation [3] cannot be confirmed against source — REJECTED\n" +
-        "C.02 — citation [7] over-broad inference — FLAGGED\n" +
-        "C.03 — six citations sealed and admitted",
-      meta: [
-        ["challenges", "2 / V"],
-        ["sealed", "6"],
-        ["rejected", "2"],
-        ["elapsed", "00:31"],
-      ],
     },
     rectifier: {
       body:
         "The Rectifier reweaves the rejected passages, drawing on the Familiar's reserve of " +
         "sources. The amended testimony is returned to the Scribe for a second inscription.",
-      footnotes:
-        "↳ revised passage [3] — replaced with Agrippa primary source\n" +
-        "↳ revised passage [7] — narrowed to Renaissance synthesis claim",
-      meta: [
-        ["amendments", "2"],
-        ["tokens", "612"],
-        ["passes", "II of II"],
-        ["elapsed", "00:46"],
-      ],
     },
     logos: {
       body:
         "The Logos speaks the Word. The final testimony is closed, sealed, and committed to the " +
         "scroll. The Circle may now be closed.",
-      footnotes:
-        "++TESTIMONIUM++ Sealed at 01:02.40 — 1,463 words, 8 citations, 6 sources cited.\n" +
-        "The Logos has spoken. The Circle is closed.",
-      meta: [
-        ["words", "1,463"],
-        ["citations", "8"],
-        ["sources", "6"],
-        ["elapsed", "01:02"],
-      ],
     },
-  },
-  report: {
-    title: "Testimony of the Four Cardinal Archangels",
-    sections: [
-      {
-        heading: "The Renaissance Crystallisation",
-        body:
-          "The specific mapping — Raphael / East / Air, Michael / South / Fire, Gabriel / West / Water, " +
-          "Uriel / North / Earth — is most clearly consolidated in Heinrich Cornelius Agrippa's De Occulta " +
-          "Philosophia, Book III, ch. 24, published in its full form in 1533, though the manuscript circulated " +
-          "from c. 1510.",
-        cite: [1, 2],
-      },
-      {
-        heading: "Earlier, Partial Schemata",
-        body:
-          "Partial precursors appear in the Hebrew Sefer Raziel HaMalakh manuscript tradition (compiled c. " +
-          "13th century from older material), where archangelic-directional pairings exist but the specific " +
-          "Raphael / East attribution is not yet fixed. The directional language is more often Hebrew-­" +
-          "geographic than elemental.",
-        cite: [3, 4],
-      },
-      {
-        heading: "Provenance of the Mapping",
-        body:
-          "The Renaissance synthesis appears to draw on three converging streams: the late-antique Greek " +
-          "magical papyri (PGM), the medieval Solomonic grimoire tradition (especially the Liber Iuratus " +
-          "Honorii), and the Christian Cabalistic reading of Hebrew angelology — fused, in Agrippa's hands, " +
-          "into the four-fold system that would inform Renaissance and post-Renaissance ceremonial magic.",
-        cite: [5, 6],
-      },
-      {
-        heading: "Verdict",
-        body:
-          "The mapping in its modern form is approximately 500 years old. Its consolidation is Renaissance, " +
-          "its components older but never previously fixed in this combination.",
-      },
-    ],
-    sources: [
-      { n: 1, title: "De Occulta Philosophia, Book III", src: "esotericarchives.com / agrippa3" },
-      { n: 2, title: "Agrippa's Three Books — overview", src: "Stanford Encyclopedia of Philosophy" },
-      { n: 3, title: "Sefer Raziel HaMalakh — survey", src: "Jewish Virtual Library" },
-      { n: 4, title: "Hebrew angelology in MS tradition", src: "JSTOR 3258891" },
-      { n: 5, title: "Liber Iuratus Honorii — critical ed.", src: "sacred-texts.com" },
-      { n: 6, title: "Archangel — encyclopedia entry", src: "Wikipedia, accessed 2024" },
-    ],
   },
 };
 
@@ -167,18 +65,14 @@ const STATION_POSITIONS = [
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI"];
 
-/* Map LangGraph node names → spirit indices (0..5).
- * Order must match SPIRIT_ORDER in sigils.jsx:
- *   0 magister, 1 familiar, 2 scribe, 3 censor, 4 rectifier, 5 logos
+/* Default node→spirit index mapping, used until GET /config resolves.
+ * Values must match SPIRIT_ORDER in sigils.jsx.
+ * The live mapping is maintained in nodeToSpiritRef inside FlowPrototype
+ * and updated from the config endpoint so backend renames propagate automatically.
  */
-const NODE_TO_SPIRIT = {
-  orchestrator: 0,
-  searcher: 1,
-  reader: 2,
-  critic: 3,
-  refiner: 4,
-  writer: 5,
-};
+const DEFAULT_NODE_ORDER = [
+  "orchestrator", "searcher", "reader", "critic", "refiner", "writer",
+];
 
 /* If the URL path is /r/{job_id}, return job_id. Otherwise null. */
 function jobIdFromPath() {
@@ -352,7 +246,7 @@ function useCircleSize() {
 }
 
 /* ── top status strip ─────────────────────────────────────────────────── */
-function TopStrip({ phase, elapsedMs, challenges }) {
+function TopStrip({ phase, elapsedMs, challenges, config }) {
   let dotClass = "dot-idle";
   let label = "Circle Sealed · Awaiting";
   if (phase === "composing") {
@@ -365,6 +259,8 @@ function TopStrip({ phase, elapsedMs, challenges }) {
     dotClass = "dot-done";
     label = `Circle Open · Word Spoken · ${fmtMs(elapsedMs)}`;
   }
+  const modelStr = config ? `${config.model} · ${config.provider_label}` : "…";
+  const ceilingStr = config ? ROMAN[config.max_iterations_ceiling - 1] : "V";
   return (
     <div className="flow-topstrip">
       <div>↳ Source · github</div>
@@ -373,7 +269,7 @@ function TopStrip({ phase, elapsedMs, challenges }) {
         <span>{label}</span>
       </div>
       <div>
-        Qwen2.5-7B · HF Inference &nbsp; · &nbsp; ⊙ {ROMAN[challenges - 1]} of V challenges
+        {modelStr} &nbsp; · &nbsp; ⊙ {ROMAN[challenges - 1]} of {ceilingStr} challenges
       </div>
     </div>
   );
@@ -410,7 +306,7 @@ function WelcomePhase({ active, onOpenForm }) {
 }
 
 /* ── compose form (visible only while phase=composing) ────────────────── */
-function ComposeForm({ phase, question, setQuestion, challenges, setChallenges, onCancel, onSubmit }) {
+function ComposeForm({ phase, question, setQuestion, challenges, setChallenges, maxChallenges, onCancel, onSubmit }) {
   const taRef = React.useRef(null);
   React.useEffect(() => {
     if (phase === "composing" && taRef.current) {
@@ -421,11 +317,11 @@ function ComposeForm({ phase, question, setQuestion, challenges, setChallenges, 
   const onTrackClick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = (e.clientX - rect.left) / rect.width;
-    const v = Math.max(1, Math.min(5, Math.round(1 + ratio * 4)));
+    const v = Math.max(1, Math.min(maxChallenges, Math.round(1 + ratio * (maxChallenges - 1))));
     setChallenges(v);
   };
 
-  const fillPct = ((challenges - 1) / 4) * 100;
+  const fillPct = ((challenges - 1) / (maxChallenges - 1)) * 100;
 
   return (
     <div className="flow-compose" role="dialog" aria-label="Pose your question">
@@ -449,7 +345,7 @@ function ComposeForm({ phase, question, setQuestion, challenges, setChallenges, 
             <div className="flow-slider-fill" style={{ width: `${fillPct}%` }} />
             <div className="flow-slider-knob" style={{ left: `${fillPct}%` }} />
           </div>
-          <span>V</span>
+          <span>{ROMAN[maxChallenges - 1]}</span>
           <div className="flow-slider-readout">{ROMAN[challenges - 1]}</div>
         </div>
         <div className="flow-compose-actions">
@@ -695,8 +591,20 @@ function FlowPrototype() {
   const [errorText, setErrorText] = React.useState(null);
   const [spiritData, setSpiritData] = React.useState({});
 
+  const [config, setConfig] = React.useState(null);
+
   const esRef = React.useRef(null);
   const lastEventIdRef = React.useRef(-1);
+  // Node-name → spirit-index mapping. Seeded from DEFAULT_NODE_ORDER, then
+  // updated once GET /config resolves so backend renames propagate automatically.
+  const nodeToSpiritRef = React.useRef(
+    Object.fromEntries(DEFAULT_NODE_ORDER.map((name, i) => [name, i]))
+  );
+  // Epoch-ms anchor for the live timer. The timer interval reads this on
+  // every tick, so refreshing it from a server snapshot (on cold load via
+  // /r/{id} or on visibilitychange) corrects the display without having to
+  // restart the interval.
+  const startedAtRef = React.useRef(null);
   const [copyState, setCopyState] = React.useState("idle");
 
   const copyShareLink = React.useCallback(async () => {
@@ -723,7 +631,7 @@ function FlowPrototype() {
   const handleEvent = React.useCallback((evt) => {
     lastEventIdRef.current = Math.max(lastEventIdRef.current, Number(evt.id));
     if (evt.event === "node_complete") {
-      const idx = NODE_TO_SPIRIT[evt.data.node];
+      const idx = nodeToSpiritRef.current[evt.data.node];
       if (idx !== undefined) {
         setProgressIdx(idx);
         setCompleted((prev) => (prev.includes(idx) ? prev : [...prev, idx]));
@@ -769,6 +677,8 @@ function FlowPrototype() {
     }
     setJobId(id);
     setQuestion(snap.question || "");
+    // Restore the slider/header to this job's actual max_iterations value.
+    if (snap.max_iterations != null) setChallenges(snap.max_iterations);
     // Replay events to rebuild progressIdx / completed / spiritData / lastEventId.
     // Later events overwrite earlier ones for the same spirit (latest-wins on loops).
     let maxId = -1;
@@ -778,7 +688,7 @@ function FlowPrototype() {
     for (const evt of snap.events || []) {
       maxId = Math.max(maxId, evt.id);
       if (evt.event === "node_complete") {
-        const idx = NODE_TO_SPIRIT[evt.data.node];
+        const idx = nodeToSpiritRef.current[evt.data.node];
         if (idx !== undefined) {
           seen.add(idx);
           latestIdx = idx;
@@ -794,16 +704,50 @@ function FlowPrototype() {
     }
     if (snap.status === "done") {
       setReportText(snap.report || "");
+      // Seed the elapsed display from the job's recorded duration so the
+      // "sealed at …" timestamp is correct even after a page reload or tab switch.
+      if (snap.duration_ms != null) setElapsedMs(snap.duration_ms);
       setPhase("complete");
     } else if (snap.status === "error") {
       setErrorText(snap.error || "Unknown error");
       setPhase("idle");
     } else if (snap.status === "running") {
+      // Anchor the live timer on the server's started_at so it stays accurate
+      // even after the tab was backgrounded (where setInterval gets throttled).
+      // The timer interval reads startedAtRef each tick, so updating it here
+      // self-corrects on the next tick without restarting the interval.
+      if (snap.started_at_ms != null) {
+        startedAtRef.current = snap.started_at_ms;
+        setElapsedMs(Date.now() - snap.started_at_ms);
+      }
       setPhase("working");
       connectStream(id);
     }
     return true;
   }, [connectStream]);
+
+  /* Fetch server config once on mount. */
+  React.useEffect(() => {
+    fetch("/config")
+      .then((r) => r.json())
+      .then((cfg) => setConfig(cfg))
+      .catch(() => {}); // silently fall back to defaults on failure
+  }, []);
+
+  /* Keep nodeToSpiritRef in sync with config so event routing uses server names. */
+  React.useEffect(() => {
+    if (!config) return;
+    nodeToSpiritRef.current = Object.fromEntries(
+      config.node_order.map((name, i) => [name, i])
+    );
+  }, [config]);
+
+  /* Seed challenges default from config (only when no job is active). */
+  React.useEffect(() => {
+    if (config && phase === "idle") {
+      setChallenges(config.max_iterations_default);
+    }
+  }, [config]); // intentionally omits phase — only fires once when config loads
 
   /* On mount: prefer /r/{id} URL, then sessionStorage. Also listen for tab refocus. */
   React.useEffect(() => {
@@ -825,11 +769,13 @@ function FlowPrototype() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Timer accumulator (real elapsed during working/complete)
+  // Live timer during the working phase. Anchored on startedAtRef so a
+  // re-hydrate from the server (cold load or visibilitychange) can correct
+  // the display by writing the ref — no interval restart needed.
   React.useEffect(() => {
     if (phase !== "working") return;
-    const start = Date.now() - elapsedMs;
-    const id = setInterval(() => setElapsedMs(Date.now() - start), 80);
+    if (startedAtRef.current == null) startedAtRef.current = Date.now() - elapsedMs;
+    const id = setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 80);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
@@ -845,6 +791,7 @@ function FlowPrototype() {
     setErrorText(null);
     setSpiritData({});
     lastEventIdRef.current = -1;
+    startedAtRef.current = Date.now();
     setPhase("working");
     try {
       const r = await fetch("/research", {
@@ -880,6 +827,7 @@ function FlowPrototype() {
     setReportOpen(false);
     setElapsedMs(0);
     lastEventIdRef.current = -1;
+    startedAtRef.current = null;
   };
 
   // ESC closes overlays
@@ -953,7 +901,7 @@ function FlowPrototype() {
           </button>
         </div>
       )}
-      <TopStrip phase={phase} elapsedMs={elapsedMs} challenges={challenges} />
+      <TopStrip phase={phase} elapsedMs={elapsedMs} challenges={challenges} config={config} />
 
       <div className="flow-stage">
         {/* The Circle — always mounted, scales/fades per phase */}
@@ -988,6 +936,7 @@ function FlowPrototype() {
           setQuestion={setQuestion}
           challenges={challenges}
           setChallenges={setChallenges}
+          maxChallenges={config ? config.max_iterations_ceiling : 5}
           onCancel={cancelForm}
           onSubmit={submit}
         />

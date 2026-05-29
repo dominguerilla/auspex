@@ -34,9 +34,16 @@ from sse_starlette.sse import EventSourceResponse
 
 from graph.graph_builder import build_graph
 from llm.contract import CITATION_LINK_RE
+from llm.ollama_client import describe_llm
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
+MAX_ITERATIONS_DEFAULT = 2
+MAX_ITERATIONS_CEILING = 5
+# Ordered list of LangGraph node names, matching the pipeline execution order.
+# This is the authoritative frontend-backend contract for spirit-to-node mapping.
+NODE_ORDER = ["orchestrator", "searcher", "reader", "critic", "refiner", "writer"]
 
 DB_PATH = Path("jobs.db")
 
@@ -46,16 +53,24 @@ def init_db() -> sqlite3.Connection:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS jobs (
-            id           TEXT PRIMARY KEY,
-            question     TEXT NOT NULL,
-            status       TEXT NOT NULL,
-            report       TEXT,
-            error        TEXT,
-            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-            completed_at TEXT
+            id             TEXT PRIMARY KEY,
+            question       TEXT NOT NULL,
+            status         TEXT NOT NULL,
+            report         TEXT,
+            error          TEXT,
+            created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+            completed_at   TEXT,
+            max_iterations INTEGER,
+            duration_ms    INTEGER
         )
         """
     )
+    # Migrate older DB schemas that pre-date these columns.
+    for col, typedef in [("max_iterations", "INTEGER"), ("duration_ms", "INTEGER")]:
+        try:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {typedef}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists.
     conn.commit()
     return conn
 
@@ -63,12 +78,14 @@ def init_db() -> sqlite3.Connection:
 class Job:
     """In-memory live state for one research run."""
 
-    def __init__(self, question: str):
+    def __init__(self, question: str, max_iterations: int):
         self.question: str = question
+        self.max_iterations: int = max_iterations
         self.events: list[dict] = []
         self.status: str = "running"
         self.report: str | None = None
         self.error: str | None = None
+        self.duration_ms: int | None = None
         self.started_at: float = time.time()
         self.subscribers: set[asyncio.Queue] = set()
 
@@ -142,7 +159,7 @@ app = FastAPI(lifespan=lifespan)
 
 class ResearchRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
-    max_iterations: int = Field(default=2, ge=1, le=5)
+    max_iterations: int = Field(default=MAX_ITERATIONS_DEFAULT, ge=1, le=MAX_ITERATIONS_CEILING)
 
 
 async def run_job(job_id: str, question: str, max_iterations: int) -> None:
@@ -170,22 +187,26 @@ async def run_job(job_id: str, question: str, max_iterations: int) -> None:
                     job.report = delta["final_report"]
 
         job.status = "done"
+        job.duration_ms = round((time.time() - job.started_at) * 1000)
         job.append("complete", {"report": job.report or ""})
         db.execute(
-            "INSERT OR REPLACE INTO jobs (id, question, status, report, completed_at) "
-            "VALUES (?, ?, 'done', ?, datetime('now'))",
-            (job_id, question, job.report or ""),
+            "INSERT OR REPLACE INTO jobs "
+            "(id, question, status, report, max_iterations, duration_ms, completed_at) "
+            "VALUES (?, ?, 'done', ?, ?, ?, datetime('now'))",
+            (job_id, question, job.report or "", max_iterations, job.duration_ms),
         )
         db.commit()
     except Exception as exc:
         logger.exception("Job %s failed", job_id)
         job.status = "error"
         job.error = str(exc)
+        job.duration_ms = round((time.time() - job.started_at) * 1000)
         job.append("error_event", {"message": job.error})
         db.execute(
-            "INSERT OR REPLACE INTO jobs (id, question, status, error, completed_at) "
-            "VALUES (?, ?, 'error', ?, datetime('now'))",
-            (job_id, question, job.error),
+            "INSERT OR REPLACE INTO jobs "
+            "(id, question, status, error, max_iterations, duration_ms, completed_at) "
+            "VALUES (?, ?, 'error', ?, ?, ?, datetime('now'))",
+            (job_id, question, job.error, max_iterations, job.duration_ms),
         )
         db.commit()
 
@@ -193,7 +214,7 @@ async def run_job(job_id: str, question: str, max_iterations: int) -> None:
 @app.post("/research")
 async def start_research(req: ResearchRequest):
     job_id = uuid.uuid4().hex
-    jobs[job_id] = Job(req.question)
+    jobs[job_id] = Job(req.question, req.max_iterations)
     asyncio.create_task(run_job(job_id, req.question, req.max_iterations))
     return {"job_id": job_id}
 
@@ -205,19 +226,28 @@ async def snapshot(job_id: str):
         return {
             "status": job.status,
             "question": job.question,
+            "max_iterations": job.max_iterations,
+            "duration_ms": job.duration_ms,
+            # Epoch ms — frontend anchors its live timer on this so the
+            # display stays accurate across tab refocus and background throttling.
+            "started_at_ms": round(job.started_at * 1000),
             "events": job.events,
             "report": job.report,
             "error": job.error,
         }
     row = db.execute(
-        "SELECT question, status, report, error FROM jobs WHERE id = ?", (job_id,)
+        "SELECT question, status, report, error, max_iterations, duration_ms "
+        "FROM jobs WHERE id = ?",
+        (job_id,),
     ).fetchone()
     if row is None:
         return JSONResponse({"error": "expired"}, status_code=404)
-    question, status, report, error = row
+    question, status, report, error, max_iterations, duration_ms = row
     return {
         "status": status,
         "question": question,
+        "max_iterations": max_iterations,
+        "duration_ms": duration_ms,
         "events": [],
         "report": report,
         "error": error,
@@ -277,6 +307,17 @@ async def stream(job_id: str, request: Request):
             job.subscribers.discard(q)
 
     return EventSourceResponse(event_generator())
+
+
+@app.get("/config")
+async def config_endpoint():
+    """Static server configuration consumed by the frontend on mount."""
+    return {
+        **describe_llm(),
+        "max_iterations_default": MAX_ITERATIONS_DEFAULT,
+        "max_iterations_ceiling": MAX_ITERATIONS_CEILING,
+        "node_order": NODE_ORDER,
+    }
 
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
