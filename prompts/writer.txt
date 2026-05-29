@@ -8,7 +8,7 @@ Source summaries:
 Critic's notes: {critique_feedback}
 
 IMPORTANT: You may ONLY cite URLs that appear in the source summaries above. Do NOT
-invent, guess, or recall URLs from your training data. Every [Source](url) citation
+invent, guess, or recall URLs from your training data. Every {citation_format} citation
 must use a URL from the list above verbatim. If a claim cannot be tied to one of
 these sources, present it without a citation or omit it.
 
@@ -19,4 +19,4 @@ Write a research report in Markdown format with:
 4. A balanced conclusion that directly answers the research question
 5. A "Sources" section listing ONLY the URLs from above that you actually cited
 
-The report should be thorough but readable — aim for 600-1000 words. Use bullet points for lists of tradeoffs or comparisons. Cite sources inline using Markdown link syntax: [Source](url) — the URL goes inside parentheses, NOT inside the square brackets. Example: `[Source](https://example.com/article)`. Do not write `[Source: https://example.com/article]`.
+The report should be thorough but readable — aim for 600-1000 words. Use bullet points for lists of tradeoffs or comparisons. Cite sources inline using Markdown link syntax: {citation_format} — the URL goes inside parentheses, NOT inside the square brackets. Example: `[Source](https://example.com/article)`. Do not write `[Source: https://example.com/article]`.

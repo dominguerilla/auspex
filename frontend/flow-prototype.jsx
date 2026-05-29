@@ -515,9 +515,6 @@ function CompletePhase({ active, onOpenReport }) {
       </div>
       <div className="flow-complete-inner">
         <div className="flow-complete-eyebrow">All six spirits have sealed their testimony</div>
-        <div className="flow-complete-sub">
-          Touch the Circle's heart to open the scroll.
-        </div>
         <button className="flow-complete-cta" onClick={onOpenReport}>
           Open the Scroll &nbsp;⊙
         </button>

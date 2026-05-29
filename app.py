@@ -20,7 +20,6 @@ restarts but is wiped on every redeploy.
 import asyncio
 import json
 import logging
-import re
 import sqlite3
 import time
 import uuid
@@ -34,6 +33,7 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from graph.graph_builder import build_graph
+from llm.contract import CITATION_LINK_RE
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -89,9 +89,6 @@ def _first_line(text: str | None) -> str:
     return lines[0] if lines else ""
 
 
-_CITE_RE = re.compile(r"\[(\d+)\]")
-
-
 def build_node_payload(node_name: str, delta: dict) -> dict:
     """Extract per-node data from a state delta, for the spirit detail cards."""
     payload: dict = {"node": node_name, "iteration": delta.get("iteration")}
@@ -124,7 +121,7 @@ def build_node_payload(node_name: str, delta: dict) -> dict:
     elif node_name == "writer":
         report = delta.get("final_report") or ""
         payload["word_count"] = len(report.split())
-        payload["citation_count"] = len(set(_CITE_RE.findall(report)))
+        payload["citation_count"] = len(set(CITATION_LINK_RE.findall(report)))
 
     return payload
 

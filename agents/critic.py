@@ -31,6 +31,7 @@ from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage
 
 from graph.state import CritiqueResult, ResearchState
+from llm.contract import CRITIC_FAIL, CRITIC_MISSING_PREFIX, CRITIC_PASS
 from llm.ollama_client import get_llm
 
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "critic.txt"
@@ -61,6 +62,9 @@ def run_critic(state: ResearchState) -> dict:
     prompt = prompt_template.format(
         research_question=state["research_question"],
         sources_text=sources_text,
+        pass_label=CRITIC_PASS,
+        fail_label=CRITIC_FAIL,
+        missing_prefix=CRITIC_MISSING_PREFIX,
     )
 
     response = llm.invoke([HumanMessage(content=prompt)])
@@ -83,11 +87,11 @@ def find_verdict(lines: list[str]) -> tuple[bool, int | None]:
     verdict_line = None
     for i, line in enumerate(lines):
         upper = line.strip().upper()
-        if upper == "PASSED":
+        if upper == CRITIC_PASS:
             passed = True
             verdict_line = i
             break
-        elif upper == "FAILED":
+        elif upper == CRITIC_FAIL:
             passed = False
             verdict_line = i
             break
@@ -99,7 +103,7 @@ def find_feedback_and_missing(start_idx: int | None, lines: list[str]) -> tuple[
     missing_idx = None
     if start_idx is not None:
         for i, line in enumerate(lines[start_idx + 1:]):
-            if line.strip().upper().startswith("MISSING:"):
+            if line.strip().upper().startswith(CRITIC_MISSING_PREFIX):
                 missing_idx = start_idx + 1 + i
                 break
             else:
