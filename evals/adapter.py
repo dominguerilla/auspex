@@ -1,4 +1,4 @@
-"""Adapter wrapping the research-agent LangGraph for the assay harness.
+"""Adapter wrapping the Auspex LangGraph for the assay harness.
 
 assay calls agents as ``Callable[[dict], str | dict]``. The graph expects a
 fully populated ``ResearchState`` TypedDict; this module builds that initial

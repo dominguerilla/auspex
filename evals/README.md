@@ -1,6 +1,6 @@
-# research-agent evals
+# Auspex evals
 
-End-to-end evaluation suite for the research agent, built on
+End-to-end evaluation suite for Auspex, built on
 [`assay`](https://github.com/dominguerilla/assay).
 
 The eval suite is intentionally co-located with the agent: when the graph
