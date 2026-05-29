@@ -121,15 +121,6 @@ and the URL is rewritten to `/r/{job_id}` so the address bar is itself a shareab
 link. Completed reports are persisted to `jobs.db` (SQLite on the container's
 ephemeral disk) and stay available until the next redeployment.
 
-### Streamlit Web UI (legacy, local only)
-
-```bash
-streamlit run streamlit_app.py
-```
-
-The Streamlit UI is kept for local debugging / agent inspection. It is not
-deployed to the HF Space — the Space runs `app.py`.
-
 ## Deployment (HF Spaces, Docker SDK)
 
 This Space is configured with `sdk: docker` (see the frontmatter above). HF

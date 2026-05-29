@@ -18,8 +18,6 @@ python main.py "Your research question here"
 python main.py "Your question" --max-iterations 3 --output-dir reports/
 ```
 
-There is also a Streamlit web UI: `streamlit run streamlit_app.py`.
-
 ## Testing
 
 ```bash
