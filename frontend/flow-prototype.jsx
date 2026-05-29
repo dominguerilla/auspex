@@ -1,4 +1,4 @@
-/* flow-prototype.jsx — The Goetic Tribunal, single-viewport flow.
+/* flow-prototype.jsx — The Auspex, single-viewport flow.
  *
  * State machine:
  *   idle → composing → working → complete
@@ -12,10 +12,7 @@
  */
 
 const FLOW_CONTENT = {
-  defaultQuestion:
-    "Quod sit historica origo quattuor archangelorum cardinalium — " +
-    "Raphael / Oriens / Aer · Michael / Auster / Ignis · Gabriel / Occidens / Aqua · " +
-    "Auriel / Septentrio / Terra? How old is that specific mapping, and where does it first appear?",
+  defaultQuestion: "",
   spirits: {
     magister: {
       body:
@@ -207,7 +204,7 @@ function renderSpiritCardContent(idx, data, fallback) {
     case 0: { // Magister — orchestrator
       const queries = data.queries || [];
       return {
-        body: `The question is broken into ${queries.length} search-queries.`,
+        body: `The question is broken into ${queries.length} queries.`,
         footnotes: queries.length
           ? queries.map((q, i) => `Q.${String(i + 1).padStart(2, "0")} — ${q}`).join("\n")
           : null,
@@ -225,7 +222,7 @@ function renderSpiritCardContent(idx, data, fallback) {
         shown.map((u) => `↳ ${u}`).join("\n") +
         (extra > 0 ? `\n· + ${extra} further sources` : "");
       return {
-        body: `The Familiar rode out and returned ${data.results_count || 0} testimonies.`,
+        body: `The Familiar collected ${data.results_count || 0} testimonies.`,
         footnotes: shown.length ? text : null,
         meta: [
           ["results", String(data.results_count || 0)],
@@ -242,7 +239,7 @@ function renderSpiritCardContent(idx, data, fallback) {
           .map((s) => `↳ ${s.url}${s.summary_first_line ? "\n  " + s.summary_first_line : ""}`)
           .join("\n") + (extra > 0 ? `\n· + ${extra} more` : "");
       return {
-        body: `${data.sources_count || 0} sources were summarised into the working.`,
+        body: `${data.sources_count || 0} sources were absorbed into the working.`,
         footnotes: shown.length ? text : null,
         meta: [
           ["sources", String(data.sources_count || 0)],
@@ -396,14 +393,13 @@ function WelcomePhase({ active, onOpenForm }) {
   return (
     <div className={`flow-phase flow-welcome${active ? " is-active" : ""}`}>
       <div className="flow-welcome-inner">
-        <div className="flow-welcome-ornament">· ⊙ ·</div>
-        <h1 className="flow-welcome-title">The Goetic Tribunal</h1>
+        <div className="flow-welcome-ornament"> </div>
+        <h1 className="flow-welcome-title">The Auspex</h1>
         <div className="flow-welcome-sub">
-          A bounded research working — six spirits, one report.
+          Six spirits, one report.
         </div>
         <div className="flow-welcome-hero-blurb">
-          A LangGraph pipeline staged as a ceremonial working — Magister, Familiar, Scribe,
-          Censor, Rectifier, Logos — that turns a question into a cited markdown report.
+          A LangGraph agentic ceremony that transforms a question into a cited markdown report.
         </div>
         <button className="flow-welcome-cta" onClick={onOpenForm}>
           Pose the Question &nbsp;⊙
@@ -458,7 +454,11 @@ function ComposeForm({ phase, question, setQuestion, challenges, setChallenges, 
         </div>
         <div className="flow-compose-actions">
           <button className="flow-compose-cancel" onClick={onCancel}>Cancel</button>
-          <button className="flow-compose-submit" onClick={onSubmit}>
+          <button
+            className="flow-compose-submit"
+            onClick={onSubmit}
+            disabled={!question.trim()}
+          >
             Open the Circle &nbsp;⊙
           </button>
         </div>

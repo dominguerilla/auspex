@@ -1,5 +1,5 @@
 /* flow-prototype.css
- * The Goetic Tribunal — single-viewport flow.
+ * The Auspex — single-viewport flow.
  *
  * Three phases swap in place: welcome → working → complete.
  * Sub-states: composing (form open over welcome), inspecting (spirit
@@ -178,6 +178,7 @@ html, body {
 .flow-welcome-ornament {
   font-size: 16px;
   letter-spacing: 1em;
+  padding-left: 1em;
   color: var(--ink-fade);
   margin-bottom: 14px;
 }
@@ -373,8 +374,13 @@ html, body {
   font-weight: 600;
   box-shadow: 0 2px 0 var(--ink);
 }
-.flow-compose-submit:hover { background: var(--accent-lit); box-shadow: 0 3px 0 var(--ink); }
-.flow-compose-submit:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
+.flow-compose-submit:hover:not(:disabled) { background: var(--accent-lit); box-shadow: 0 3px 0 var(--ink); }
+.flow-compose-submit:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 var(--ink); }
+.flow-compose-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
 
 /* ====================================================================
  * PHASE 2 — WORKING
@@ -975,7 +981,7 @@ html, body {
     line-height: 1.4;
   }
 
-  .flow-welcome-ornament { font-size: 13px; letter-spacing: 0.5em; }
+  .flow-welcome-ornament { font-size: 13px; letter-spacing: 0.5em; padding-left: 0.5em; }
   .flow-welcome-title {
     font-size: clamp(28px, 10.5cqw, 44px);
     letter-spacing: 0.1em;
