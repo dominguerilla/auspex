@@ -27,3 +27,9 @@ htmlcov/
 # evals
 evals/runs/
 evals/outputs/
+
+# Runtime data (FastAPI jobs store)
+jobs.db
+jobs.db-journal
+jobs.db-wal
+jobs.db-shm

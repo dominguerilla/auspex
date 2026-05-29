@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="The Goetic Tribunal — a multi-agent research working powered by LangGraph + Ollama"
+        description="The Auspex — a multi-agent research ritual powered by LangGraph + Ollama"
     )
     parser.add_argument(
         "question",

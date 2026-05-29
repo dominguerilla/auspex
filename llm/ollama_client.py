@@ -24,6 +24,33 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Single source of truth for provider/model defaults — also consumed by
+# describe_llm() so the frontend's /config display can't drift from what
+# get_llm() actually constructs.
+_OLLAMA_MODEL_DEFAULT = "qwen2.5:3b"
+_HF_MODEL_DEFAULT = "meta-llama/Llama-3.1-8B-Instruct"
+_PROVIDER_LABELS = {"ollama": "Ollama", "huggingface": "HF Inference"}
+
+
+def describe_llm() -> dict:
+    """Return the provider/model the next get_llm() call would construct.
+
+    Used by the FastAPI /config endpoint so the UI shows the same model name
+    the agents will actually run against, without duplicating the defaults.
+    """
+    provider = os.getenv("LLM_PROVIDER", "ollama").lower()
+    if provider == "ollama":
+        model = os.getenv("OLLAMA_MODEL", _OLLAMA_MODEL_DEFAULT)
+    elif provider == "huggingface":
+        model = os.getenv("HF_MODEL", _HF_MODEL_DEFAULT)
+    else:
+        model = ""
+    return {
+        "provider": provider,
+        "model": model,
+        "provider_label": _PROVIDER_LABELS.get(provider, provider),
+    }
+
 
 def get_llm(temperature: float = 0.3):
     """
@@ -58,7 +85,7 @@ def get_llm(temperature: float = 0.3):
         base_url = base_url.rstrip("/").removesuffix("/v1")
         return ChatOllama(
             base_url=base_url,
-            model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
+            model=os.getenv("OLLAMA_MODEL", _OLLAMA_MODEL_DEFAULT),
             temperature=temperature,
         )
 
@@ -74,7 +101,7 @@ def get_llm(temperature: float = 0.3):
             )
 
         endpoint = HuggingFaceEndpoint(
-            repo_id=os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct"),
+            repo_id=os.getenv("HF_MODEL", _HF_MODEL_DEFAULT),
             task="text-generation",
             huggingfacehub_api_token=token,
             temperature=temperature,
