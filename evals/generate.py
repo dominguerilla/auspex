@@ -1,6 +1,6 @@
 """Generate and save agent outputs for offline scoring.
 
-Run the research-agent against a dataset and write each output to a JSONL file.
+Run Auspex against a dataset and write each output to a JSONL file.
 The saved outputs can later be scored with ``evals.run --from-outputs``.
 
 Usage:
@@ -30,7 +30,7 @@ def _check_agent_connectivity() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run the research-agent and save outputs for later scoring."
+        description="Run Auspex and save outputs for later scoring."
     )
     parser.add_argument(
         "--dataset",

@@ -1,4 +1,4 @@
-"""Custom scorers for the research-agent eval suite.
+"""Custom scorers for the Auspex eval suite.
 
 These read structured fields out of ``case.expected`` (``must_mention``,
 ``must_not_mention``, ``min_sources``) so the dataset itself drives the

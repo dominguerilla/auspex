@@ -1,4 +1,4 @@
-"""Run the research-agent eval suite.
+"""Run the Auspex eval suite.
 
 Usage:
     python -m evals.run                                    # full suite, default scorers
@@ -106,7 +106,7 @@ async def _check_judge_connectivity(judge: LLMJudge) -> None:
 
 
 def main() -> None:
-    """Run the evaluation suite against research-agent.
+    """Run the evaluation suite against Auspex.
 
     Sets up scorers (rule-based checks and optional LLM judge), verifies connectivity
     to both the agent LLM and judge LLM, then runs the eval suite against test cases.
@@ -118,8 +118,8 @@ def main() -> None:
                         help="Path to JSONL file containing test cases (default: evals/cases.jsonl)")
     parser.add_argument("--output-dir", type=Path, default=Path("evals/runs"),
                         help="Directory to save eval results and HTML report (default: evals/runs)")
-    parser.add_argument("--name", default="research-agent-eval",
-                        help="Name for this eval run, used in output directory and report (default: research-agent-eval)")
+    parser.add_argument("--name", default="auspex-eval",
+                        help="Name for this eval run, used in output directory and report (default: auspex-eval)")
     parser.add_argument("--concurrency", type=int, default=2,
                         help="Number of parallel cases. Keep low to avoid overwhelming DuckDuckGo and local Ollama (default: 2)")
     parser.add_argument("--skip-judge", action="store_true",

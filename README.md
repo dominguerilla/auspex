@@ -1,5 +1,5 @@
 ---
-title: Multi-Agent Research Assistant
+title: Auspex
 emoji: 🔍
 colorFrom: blue
 colorTo: purple
@@ -13,13 +13,13 @@ tags:
   - research
 ---
 
-# Multi-Agent Research Assistant
+# Auspex
 
-[![Tests](https://github.com/dominguerilla/research-agent/actions/workflows/test.yml/badge.svg)](https://github.com/dominguerilla/research-agent/actions/workflows/test.yml)
-[![Try it on HF Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/c-dom/researcher)
-[![GitHub](https://img.shields.io/badge/GitHub-Source-black?logo=github)](https://github.com/dominguerilla/research-agent)
+[![Tests](https://github.com/dominguerilla/auspex/actions/workflows/test.yml/badge.svg)](https://github.com/dominguerilla/auspex/actions/workflows/test.yml)
+[![Try it on HF Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/c-dom/auspex)
+[![GitHub](https://img.shields.io/badge/GitHub-Source-black?logo=github)](https://github.com/dominguerilla/auspex)
 
-An agentic system built with **LangGraph** and **Ollama/HuggingFace** that researches topics by orchestrating a graph of specialised agents.
+Auspex is a multi-agent research assistant built with **LangGraph** and **Ollama/HuggingFace** that researches topics by orchestrating a graph of specialised agents.
 
 ## Architecture
 
@@ -87,7 +87,7 @@ Optionally enable [LangSmith](https://smith.langchain.com/) tracing:
 ```
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_API_KEY=your_key_here
-LANGCHAIN_PROJECT=researcher
+LANGCHAIN_PROJECT=auspex
 ```
 
 ## Usage
@@ -120,15 +120,6 @@ job's `job_id` is stored in `sessionStorage` so a refresh resumes the same job,
 and the URL is rewritten to `/r/{job_id}` so the address bar is itself a shareable
 link. Completed reports are persisted to `jobs.db` (SQLite on the container's
 ephemeral disk) and stay available until the next redeployment.
-
-### Streamlit Web UI (legacy, local only)
-
-```bash
-streamlit run streamlit_app.py
-```
-
-The Streamlit UI is kept for local debugging / agent inspection. It is not
-deployed to the HF Space — the Space runs `app.py`.
 
 ## Deployment (HF Spaces, Docker SDK)
 

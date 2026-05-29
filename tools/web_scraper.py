@@ -37,7 +37,7 @@ from markdownify import markdownify as md
 
 _HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (compatible; ResearchBot/1.0; +https://github.com/example/researcher)"
+        "Mozilla/5.0 (compatible; AuspexBot/1.0; +https://github.com/example/researcher)"
     )
 }
 
