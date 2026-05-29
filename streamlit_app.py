@@ -46,7 +46,7 @@ load_dotenv()
 # ─────────────────────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="The Goetic Tribunal",
+    page_title="The Auspex",
     page_icon="⊙",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -276,15 +276,13 @@ def render_topstrip(status: str = "sealed", elapsed: str | None = None, model: s
 
 def render_hero(blurb: bool = True) -> str:
     extra = (
-        '<div class="gt-hero-blurb">A LangGraph pipeline staged as a ceremonial working — '
-        'Magister, Familiar, Scribe, Censor, Rectifier, Logos — that turns a '
-        'question into a cited markdown report.</div>'
+        '<div class="gt-hero-blurb">A LangGraph agentic ceremony that transforms a question into a cited markdown report.</div>'
     ) if blurb else ""
     return _html(f"""
     <div class="gt-hero">
         <div class="gt-hero-ornament">· ⊙ ·</div>
-        <h1>The Goetic Tribunal</h1>
-        <div class="gt-hero-sub">A bounded research working — six spirits, one report.</div>
+        <h1>The Auspex</h1>
+        <div class="gt-hero-sub">Six spirits, one report.</div>
         {extra}
     </div>
     """)

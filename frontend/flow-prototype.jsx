@@ -17,7 +17,7 @@ const FLOW_CONTENT = {
     magister: {
       body:
         "The question is broken into four search-queries. The Magister sets the frame of " +
-        "the working and binds the Familiar to its path.",
+        "the ritual and binds the Familiar to its path.",
       footnotes:
         "Q.01 — origin \"four archangels\" directional correspondences medieval grimoire\n" +
         "Q.02 — Raphael Michael Gabriel Uriel cardinal directions elements history\n" +
