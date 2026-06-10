@@ -590,6 +590,7 @@ function FlowPrototype() {
   const [reportText, setReportText] = React.useState(null);
   const [errorText, setErrorText] = React.useState(null);
   const [spiritData, setSpiritData] = React.useState({});
+  const [confirmReset, setConfirmReset] = React.useState(false);
 
   const [config, setConfig] = React.useState(null);
 
@@ -834,6 +835,7 @@ function FlowPrototype() {
   React.useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape") {
+        if (confirmReset) { setConfirmReset(false); return; }
         if (reportOpen) setReportOpen(false);
         else if (spiritOpen != null) setSpiritOpen(null);
         else if (phase === "composing") cancelForm();
@@ -841,7 +843,7 @@ function FlowPrototype() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [reportOpen, spiritOpen, phase]);
+  }, [confirmReset, reportOpen, spiritOpen, phase]);
 
   // Jump-to helpers for the tweaks panel
   const jumpTo = (next) => {
@@ -964,10 +966,29 @@ function FlowPrototype() {
           copyState={copyState}
         />
 
-        {/* Reset / replay */}
-        <button className="flow-reset" onClick={reset}>
+        {/* Reset / replay — opens confirmation dialog */}
+        <button className="flow-reset" onClick={() => setConfirmReset(true)}>
           ↺ Reset
         </button>
+
+        {/* Reset confirmation dialog */}
+        {confirmReset && (
+          <div className="flow-confirm-scrim" onClick={() => setConfirmReset(false)}>
+            <div className="flow-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+              <div className="flow-confirm-dialog-title">Dissolve the Working?</div>
+              <div className="flow-confirm-dialog-body">
+                All progress will be lost and the Circle will be unbound.
+                This cannot be undone.
+              </div>
+              <div className="flow-confirm-dialog-actions">
+                <button onClick={() => setConfirmReset(false)}>Cancel</button>
+                <button className="flow-confirm-yes" onClick={() => { setConfirmReset(false); reset(); }}>
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <Footer />
