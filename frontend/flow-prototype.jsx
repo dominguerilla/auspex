@@ -246,7 +246,7 @@ function useCircleSize() {
 }
 
 /* ── top status strip ─────────────────────────────────────────────────── */
-function TopStrip({ phase, elapsedMs, challenges, config }) {
+function TopStrip({ phase, elapsedMs, challenges, config, onReset }) {
   let dotClass = "dot-idle";
   let label = "Circle Sealed · Awaiting";
   if (phase === "composing") {
@@ -269,7 +269,10 @@ function TopStrip({ phase, elapsedMs, challenges, config }) {
         <span>{label}</span>
       </div>
       <div>
-        {modelStr} &nbsp; · &nbsp; ⊙ {ROMAN[challenges - 1]} of {ceilingStr} challenges
+        {(phase === "working" || phase === "complete")
+          ? <button className="flow-reset" onClick={onReset}>↺ Reset</button>
+          : <span>{modelStr} &nbsp; · &nbsp; ⊙ {ROMAN[challenges - 1]} of {ceilingStr} challenges</span>
+        }
       </div>
     </div>
   );
@@ -381,7 +384,10 @@ function WorkingPhase({ active, question, progressIdx, completed }) {
           <div className="flow-working-footer">
             <div className="flow-working-stage-name">
               <span className="roman">Stage {ROMAN[progressIdx] || "I"} of VI</span>
-              {spiritName} — {SIGILS[spirit] && SIGILS[spirit].verb}
+              <span>{spiritName}</span>
+              {SIGILS[spirit] && (
+                <span className="flow-working-stage-verb">— {SIGILS[spirit].verb}</span>
+              )}
             </div>
             <div className="flow-working-stagebar">
               {SPIRIT_ORDER.map((_, i) => {
@@ -394,7 +400,7 @@ function WorkingPhase({ active, question, progressIdx, completed }) {
             <div className="flow-working-timer">In motion</div>
           </div>
           <div className="flow-working-hint">
-            ↳ Tap a sigil on the circle to read its testimony
+            ↑ Tap a sigil on the circle to read its testimony
           </div>
         </div>
       </div>
@@ -903,7 +909,7 @@ function FlowPrototype() {
           </button>
         </div>
       )}
-      <TopStrip phase={phase} elapsedMs={elapsedMs} challenges={challenges} config={config} />
+      <TopStrip phase={phase} elapsedMs={elapsedMs} challenges={challenges} config={config} onReset={() => setConfirmReset(true)} />
 
       <div className="flow-stage">
         {/* The Circle — always mounted, scales/fades per phase */}
@@ -965,11 +971,6 @@ function FlowPrototype() {
           onCopyLink={copyShareLink}
           copyState={copyState}
         />
-
-        {/* Reset / replay — opens confirmation dialog */}
-        <button className="flow-reset" onClick={() => setConfirmReset(true)}>
-          ↺ Reset
-        </button>
 
         {/* Reset confirmation dialog */}
         {confirmReset && (

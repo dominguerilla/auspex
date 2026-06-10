@@ -456,6 +456,14 @@ html, body {
   color: var(--ink-fade);
   margin-bottom: 4px;
 }
+.flow-working-stage-verb {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--ink-fade);
+  margin-top: 3px;
+  text-transform: uppercase;
+}
 .flow-working-stagebar {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -933,12 +941,9 @@ html, body {
 }
 
 /* ====================================================================
- * RESET / replay button — top corner during anything but idle
+ * RESET / replay button — lives in the top strip during working/complete
  * ==================================================================== */
 .flow-reset {
-  position: absolute;
-  top: 14px;
-  right: 18px;
   background: none;
   border: 1px solid var(--ink-faint);
   font-family: 'JetBrains Mono', monospace;
@@ -948,20 +953,8 @@ html, body {
   text-transform: uppercase;
   cursor: pointer;
   padding: 6px 10px;
-  z-index: 30;
-  display: none;
-}
-.flow-root[data-phase="working"] .flow-reset,
-.flow-root[data-phase="complete"] .flow-reset {
-  display: block;
 }
 .flow-reset:hover { color: var(--ink); border-color: var(--ink); }
-
-/* When the spirit detail card is open, sink the reset button beneath the scrim
-   so it cannot be clicked or seen above the overlay. */
-.flow-root.has-spirit .flow-reset {
-  display: none;
-}
 
 /* ====================================================================
  * RESET CONFIRMATION DIALOG
@@ -1056,6 +1049,22 @@ html, body {
   .flow-topstrip > :nth-child(1),
   .flow-topstrip > :nth-child(3) { display: none; }
   .flow-topstrip > :nth-child(2) { justify-self: center; }
+
+  /* During working/complete: status left, reset button right */
+  .flow-root[data-phase="working"] .flow-topstrip,
+  .flow-root[data-phase="complete"] .flow-topstrip {
+    grid-template-columns: 1fr auto;
+    text-align: left;
+  }
+  .flow-root[data-phase="working"] .flow-topstrip > :nth-child(2),
+  .flow-root[data-phase="complete"] .flow-topstrip > :nth-child(2) {
+    justify-self: start;
+  }
+  .flow-root[data-phase="working"] .flow-topstrip > :nth-child(3),
+  .flow-root[data-phase="complete"] .flow-topstrip > :nth-child(3) {
+    display: flex;
+    align-items: center;
+  }
 
   .flow-footer {
     font-size: 11px;
