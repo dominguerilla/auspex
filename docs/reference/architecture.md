@@ -1,6 +1,6 @@
 ---
-last_verified: 2026-06-10
-sources: [graph/graph_builder.py, graph/state.py, graph/edges.py, agents/, llm/ollama_client.py, llm/contract.py, tools/, app.py, prompts/]
+last_verified: 2026-06-12
+sources: [graph/graph_builder.py, graph/state.py, graph/edges.py, agents/, llm/ollama_client.py, llm/contract.py, tools/, app.py, auspex/mcp_server/server.py, prompts/]
 owner: Carlos
 status: draft
 ---
@@ -11,12 +11,13 @@ status: draft
 
 Auspex is a **LangGraph `StateGraph`** pipeline. A single shared dict (`ResearchState`) flows through six agent nodes; each node reads from and writes back to that dict. The graph is compiled once at startup (`build_graph()` in `graph/graph_builder.py`) and reused for every research run.
 
-Two entrypoints drive the same graph:
+Three entrypoints drive the same graph:
 
 | Entrypoint | Invocation | Output |
 |---|---|---|
 | `main.py` | `graph.invoke(initial_state)` (synchronous) | Markdown file written to `output/` |
 | `app.py` | `graph.astream(initial_state)` (async) | SSE events → React frontend; completed job stored in `jobs.db` |
+| `auspex/mcp_server/` | `graph.astream(initial_state)` (async, background task) | MCP tool responses over stdio; completed job stored in `jobs.db` |
 
 ---
 
@@ -175,6 +176,16 @@ Each `node_complete` event carries a `payload` built by `build_node_payload(node
 | writer | `word_count`, `citation_count` |
 
 **Shareable URLs:** completed jobs are stored in `jobs.db` (SQLite, `app.py:54-78`). The `/r/{job_id}` route returns the same `prototype.html`; the frontend reads the job snapshot from `GET /research/{job_id}`. The SQLite file is on the container's ephemeral disk — wiped on every HF Spaces redeploy.
+
+---
+
+## MCP Server (`auspex/mcp_server/`)
+
+A third entrypoint that exposes the pipeline as MCP tools (`start_research`, `get_research_status`, `get_research_report`) and a resource (`research://{job_id}`) for Claude Desktop and other MCP clients. Launched via `python -m auspex.mcp_server` (stdio transport).
+
+Design: `start_research` enqueues a job via `asyncio.create_task()` and returns immediately; clients poll `get_research_status`. The server holds its own in-memory job dict (`_mcp_jobs`) and shares `jobs.db` for persistence on completion. It imports `build_graph()` directly — it does not import `app.py`.
+
+See [docs/mcp.md](../mcp.md) for client configuration and tool reference.
 
 ---
 

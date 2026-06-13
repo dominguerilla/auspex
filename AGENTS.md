@@ -1,13 +1,13 @@
 ---
-last_verified: 2026-06-10
-sources: [main.py, app.py, graph/graph_builder.py, graph/state.py, llm/ollama_client.py, llm/contract.py]
+last_verified: 2026-06-12
+sources: [main.py, app.py, auspex/mcp_server/server.py, graph/graph_builder.py, graph/state.py, llm/ollama_client.py, llm/contract.py]
 owner: Carlos
 status: draft
 ---
 
 # Auspex — Start Here
 
-Auspex is a LangGraph multi-agent research pipeline that answers a question by routing a shared `ResearchState` dict through six agent nodes — orchestrator, searcher, reader, critic, refiner, writer. It has two entrypoints: a CLI (`main.py`) that writes a Markdown report to disk, and a FastAPI server (`app.py`) that streams per-node progress to a React frontend over SSE and persists completed jobs in SQLite. Both entrypoints call the same `build_graph()` function.
+Auspex is a LangGraph multi-agent research pipeline that answers a question by routing a shared `ResearchState` dict through six agent nodes — orchestrator, searcher, reader, critic, refiner, writer. It has three entrypoints: a CLI (`main.py`) that writes a Markdown report to disk, a FastAPI server (`app.py`) that streams per-node progress to a React frontend over SSE and persists completed jobs in SQLite, and an MCP server (`auspex/mcp_server/`) that exposes the pipeline as tools for Claude Desktop and other MCP clients. All three call the same `build_graph()` function.
 
 ## Doc map
 
@@ -19,7 +19,8 @@ Auspex is a LangGraph multi-agent research pipeline that answers a question by r
 | Local + cloud setup | [docs/reference/setup.md](docs/reference/setup.md) |
 | Conventions & style | [docs/reference/conventions.md](docs/reference/conventions.md) |
 | Troubleshooting | [docs/reference/troubleshooting.md](docs/reference/troubleshooting.md) |
-| LangGraph concepts & vocabulary | [docs/LEARNING.md](LEARNING.md) |
+| LangGraph concepts & vocabulary | [docs/reference/LEARNING.md](docs/reference/LEARNING.md) |
+| MCP server (Claude Desktop) | [docs/mcp.md](docs/mcp.md) |
 | Evaluation suite | [evals/README.md](evals/README.md) |
 | Architecture decisions (decided) | [docs/adr/](docs/adr/) |
 | Forward proposals (undecided) | [docs/proposals/](docs/proposals/) |
@@ -67,3 +68,7 @@ ruff check .
 - Agent functions have the signature `(state: ResearchState) -> dict` and return only the keys they write.
 - Tests mock the LLM and all network calls — integration testing requires running `main.py` manually.
 - CI (`.github/workflows/test.yml`) runs ruff then pytest on Python 3.10 and 3.12 on every master push/PR. Both must pass before merging.
+
+**Documentation rule:**
+
+Any change to a source file listed in a doc's `sources:` frontmatter must be accompanied by an update to that doc in the same commit. After finishing a non-trivial change, run the `docs-evergreen` skill ([docs/skills/docs-evergreen/SKILL.md](docs/skills/docs-evergreen/SKILL.md)) to catch drift before closing the task. At minimum: update the relevant doc's prose and bump its `last_verified` date to today.

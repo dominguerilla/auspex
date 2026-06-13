@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-10
+last_verified: 2026-06-12
 sources: [pyproject.toml, .github/workflows/test.yml, graph/state.py, agents/refiner.py, tests/conftest.py, prompts/]
 owner: Carlos
 status: draft
@@ -78,6 +78,7 @@ Source: `graph/state.py`
   - `mock_llm` — a `MagicMock` that mimics `BaseChatModel`; `mock_llm.invoke.return_value.content` is `""` by default.
   - `base_state` — a zeroed `ResearchState` dict with empty lists and `None` optional fields.
 - LLM calls and network calls (DuckDuckGo, `requests`) are always mocked via `unittest.mock.patch`. No test should require a running Ollama server or internet access.
+- Async tests (e.g. MCP server tests) use `pytest-asyncio` with `asyncio_mode = "auto"` (source: `pyproject.toml`) — no `@pytest.mark.asyncio` decorator needed.
 - Integration testing (real LLM, real network) is done manually with `main.py`.
 
 Source: `tests/conftest.py`, test files in `tests/`
