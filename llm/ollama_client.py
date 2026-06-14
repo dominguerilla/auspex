@@ -5,16 +5,27 @@ Factory pattern: get_llm() reads config from the environment and returns a
 LangChain chat model. Every agent imports THIS function instead of constructing
 its own LLM, so swapping providers is a config change — not a code change.
 
-Two providers are supported, selected by the LLM_PROVIDER env var:
+Providers are declared once in the PROVIDERS registry. get_llm() constructs the
+client and describe_llm() reports it; both read the registry, so they cannot
+drift. There are only three construction paths:
 
-  LLM_PROVIDER=ollama       (default — local development)
-    Reads OLLAMA_BASE_URL, OLLAMA_MODEL. Returns ChatOllama.
+  LLM_PROVIDER=ollama            (default — local development)
+    Reads OLLAMA_BASE_URL, OLLAMA_MODEL. Returns ChatOllama (native API).
 
-  LLM_PROVIDER=huggingface  (cloud deployment, e.g. HF Spaces)
+  LLM_PROVIDER=huggingface       (cloud deployment, e.g. HF Spaces)
     Reads HF_TOKEN, HF_MODEL. Returns ChatHuggingFace wrapping a
     HuggingFaceEndpoint that calls the HF Inference API.
 
-Both providers return objects implementing LangChain's BaseChatModel interface,
+  OpenAI-compatible              (everything else — returns ChatOpenAI)
+    Any registry entry with a "key_env" is reached through one shared path:
+      - named presets carry their own base_url + key env var + default model,
+        so e.g. LLM_PROVIDER=nous + NOUS_API_KEY just works; and
+      - LLM_PROVIDER=openai_compatible reads OPENAI_BASE_URL / OPENAI_API_KEY /
+        OPENAI_MODEL, for any endpoint without a preset (Together, Fireworks,
+        OpenRouter, vLLM, ...).
+    Adding a named OpenAI-compatible portal is a registry entry, not a branch.
+
+All providers return objects implementing LangChain's BaseChatModel interface,
 so agents call llm.invoke(messages) without caring which backend is live.
 """
 
@@ -24,12 +35,57 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Single source of truth for provider/model defaults — also consumed by
-# describe_llm() so the frontend's /config display can't drift from what
-# get_llm() actually constructs.
-_OLLAMA_MODEL_DEFAULT = "qwen2.5:3b"
-_HF_MODEL_DEFAULT = "meta-llama/Llama-3.1-8B-Instruct"
-_PROVIDER_LABELS = {"ollama": "Ollama", "huggingface": "HF Inference"}
+# Single source of truth for provider metadata. get_llm() (construction) and
+# describe_llm() (the /config display) both read this, and evals/adapter.py
+# imports describe_llm() — so the model name a run reports can't drift from the
+# model it actually used.
+#   model_env      : env var that overrides the model
+#   default_model  : used when model_env is unset ("" = no sensible default)
+# OpenAI-compatible providers additionally carry:
+#   key_env        : env var holding the API key (its presence marks the
+#                    provider as OpenAI-compatible — i.e. built via ChatOpenAI)
+#   base_url       : fixed endpoint for a named preset, or None to read
+#                    OPENAI_BASE_URL at call time (the generic provider)
+#   help           : appended to the error raised when required env is missing
+PROVIDERS: dict[str, dict] = {
+    "ollama": {
+        "label": "Ollama",
+        "model_env": "OLLAMA_MODEL",
+        "default_model": "qwen2.5:3b",
+    },
+    "huggingface": {
+        "label": "HF Inference",
+        "model_env": "HF_MODEL",
+        "default_model": "meta-llama/Llama-3.1-8B-Instruct",
+    },
+    "nous": {
+        # Model IDs are listed at https://portal.nousresearch.com/api-docs
+        "label": "Nous Portal",
+        "model_env": "NOUS_MODEL",
+        "default_model": "hermes-3-llama-3.1-70b",
+        "key_env": "NOUS_API_KEY",
+        "base_url": "https://inference-api.nousresearch.com/v1",
+        "help": "Generate a key at https://portal.nousresearch.com and "
+        "export it as NOUS_API_KEY.",
+    },
+    "openai_compatible": {
+        # No preset: the endpoint dictates the URL and valid model IDs, so
+        # OPENAI_BASE_URL and OPENAI_MODEL are required alongside the key.
+        "label": "OpenAI-compatible",
+        "model_env": "OPENAI_MODEL",
+        "default_model": "",
+        "key_env": "OPENAI_API_KEY",
+        "base_url": None,
+        "help": "Point OPENAI_BASE_URL at the endpoint's /v1 URL and set "
+        "OPENAI_API_KEY and OPENAI_MODEL.",
+    },
+}
+
+
+def _resolved_model(provider: str) -> str:
+    """Model the given provider would use, honoring its model_env override."""
+    spec = PROVIDERS[provider]
+    return os.getenv(spec["model_env"], spec["default_model"])
 
 
 def describe_llm() -> dict:
@@ -39,17 +95,48 @@ def describe_llm() -> dict:
     the agents will actually run against, without duplicating the defaults.
     """
     provider = os.getenv("LLM_PROVIDER", "ollama").lower()
-    if provider == "ollama":
-        model = os.getenv("OLLAMA_MODEL", _OLLAMA_MODEL_DEFAULT)
-    elif provider == "huggingface":
-        model = os.getenv("HF_MODEL", _HF_MODEL_DEFAULT)
-    else:
-        model = ""
+    spec = PROVIDERS.get(provider)
     return {
         "provider": provider,
-        "model": model,
-        "provider_label": _PROVIDER_LABELS.get(provider, provider),
+        "model": _resolved_model(provider) if spec else "",
+        "provider_label": spec["label"] if spec else provider,
     }
+
+
+def _build_openai_compatible(provider: str, temperature: float):
+    """Construct a ChatOpenAI for any OpenAI-compatible provider.
+
+    Handles both named presets (fixed base_url + dedicated key env var) and the
+    generic ``openai_compatible`` provider (base_url + model read from env).
+    """
+    spec = PROVIDERS[provider]
+    base_url = spec["base_url"] or os.getenv("OPENAI_BASE_URL")
+    api_key = os.getenv(spec["key_env"])
+    model = _resolved_model(provider)
+
+    # A named preset supplies base_url/model itself, so only the key can be
+    # missing; the generic provider needs all three from the environment.
+    # Validate before importing so a misconfig fails fast with a clear message
+    # rather than first dragging in the (heavy) openai client.
+    required = {spec["key_env"]: api_key}
+    if spec["base_url"] is None:
+        required["OPENAI_BASE_URL"] = base_url
+        required["OPENAI_MODEL"] = model
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        raise RuntimeError(
+            f"LLM_PROVIDER={provider} requires {', '.join(missing)} to be set. "
+            + spec["help"]
+        )
+
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+    )
 
 
 def get_llm(temperature: float = 0.3):
@@ -63,11 +150,16 @@ def get_llm(temperature: float = 0.3):
 
     Environment variables read
     --------------------------
-    LLM_PROVIDER     : "ollama" | "huggingface"  (default: "ollama")
+    LLM_PROVIDER     : see PROVIDERS keys  (default: "ollama")
     OLLAMA_BASE_URL  : str  (default: http://localhost:11434)
     OLLAMA_MODEL     : str  (default: qwen2.5:3b)
     HF_TOKEN         : str  (required when LLM_PROVIDER=huggingface)
     HF_MODEL         : str  (default: meta-llama/Llama-3.1-8B-Instruct)
+    NOUS_API_KEY     : str  (required when LLM_PROVIDER=nous)
+    NOUS_MODEL       : str  (default: hermes-3-llama-3.1-70b)
+    OPENAI_BASE_URL  : str  (required when LLM_PROVIDER=openai_compatible)
+    OPENAI_API_KEY   : str  (required when LLM_PROVIDER=openai_compatible)
+    OPENAI_MODEL     : str  (required when LLM_PROVIDER=openai_compatible)
 
     Returns
     -------
@@ -85,7 +177,7 @@ def get_llm(temperature: float = 0.3):
         base_url = base_url.rstrip("/").removesuffix("/v1")
         return ChatOllama(
             base_url=base_url,
-            model=os.getenv("OLLAMA_MODEL", _OLLAMA_MODEL_DEFAULT),
+            model=_resolved_model("ollama"),
             temperature=temperature,
         )
 
@@ -101,7 +193,7 @@ def get_llm(temperature: float = 0.3):
             )
 
         endpoint = HuggingFaceEndpoint(
-            repo_id=os.getenv("HF_MODEL", _HF_MODEL_DEFAULT),
+            repo_id=_resolved_model("huggingface"),
             task="text-generation",
             huggingfacehub_api_token=token,
             temperature=temperature,
@@ -109,6 +201,13 @@ def get_llm(temperature: float = 0.3):
         )
         return ChatHuggingFace(llm=endpoint)
 
+    # Every OpenAI-compatible provider (named preset or generic) shares one
+    # construction path, marked in the registry by a "key_env" entry.
+    spec = PROVIDERS.get(provider)
+    if spec and "key_env" in spec:
+        return _build_openai_compatible(provider, temperature)
+
     raise ValueError(
-        f"Unknown LLM_PROVIDER={provider!r}. Expected 'ollama' or 'huggingface'."
+        f"Unknown LLM_PROVIDER={provider!r}. Expected one of: "
+        f"{', '.join(sorted(PROVIDERS))}."
     )

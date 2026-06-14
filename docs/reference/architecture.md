@@ -102,16 +102,20 @@ class ResearchState(TypedDict):
 
 ## LLM factory (`llm/ollama_client.py`)
 
-`get_llm(temperature)` is the single LLM constructor. Every agent calls it; no agent imports `ChatOllama` or `ChatHuggingFace` directly. Provider selection is driven by `LLM_PROVIDER` env var at call time.
+`get_llm(temperature)` is the single LLM constructor. Every agent calls it; no agent imports `ChatOllama`, `ChatHuggingFace`, or `ChatOpenAI` directly. Provider selection is driven by `LLM_PROVIDER` env var at call time.
 
 | `LLM_PROVIDER` | Returns | Key env vars |
 |---|---|---|
 | `ollama` (default) | `ChatOllama` | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` |
 | `huggingface` | `ChatHuggingFace` wrapping `HuggingFaceEndpoint` | `HF_TOKEN`, `HF_MODEL` |
+| `nous` | `ChatOpenAI` against `portal.nousresearch.com/v1` | `NOUS_API_KEY`, `NOUS_MODEL` |
+| `openai_compatible` | `ChatOpenAI` against any OpenAI-compatible endpoint | `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL` |
 
-Both implement `BaseChatModel`; agents call `llm.invoke([HumanMessage(...)])` regardless of provider. Source: `llm/ollama_client.py:55-114`.
+All implement `BaseChatModel`; agents call `llm.invoke([HumanMessage(...)])` regardless of provider.
 
-`describe_llm()` (`llm/ollama_client.py:35-52`) returns the same provider/model the next `get_llm()` call would construct — consumed by the FastAPI `/config` endpoint so the frontend display can't drift from the actual runtime.
+**Provider registry (`PROVIDERS`).** Provider metadata — label, the env var that overrides the model, and the default model — lives in a single `PROVIDERS` dict (`llm/ollama_client.py`). Both `get_llm()` (construction) and `describe_llm()` (reporting) read it, and `evals/adapter.py` imports `describe_llm()`, so the model a run *reports* can't drift from the model it *uses*. The `openai_compatible` provider is the extension point: most new OpenAI-compatible backends (Together, Fireworks, OpenRouter, vLLM, …) are reachable via env vars alone, with no new code branch.
+
+`describe_llm()` returns the same provider/model the next `get_llm()` call would construct — consumed by the FastAPI `/config` endpoint and by the eval adapter's `agent_model` label.
 
 ---
 
