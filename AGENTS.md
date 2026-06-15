@@ -18,6 +18,7 @@ Auspex is a LangGraph multi-agent research pipeline that answers a question by r
 | System architecture | [docs/reference/architecture.md](docs/reference/architecture.md) |
 | Local + cloud setup | [docs/reference/setup.md](docs/reference/setup.md) |
 | Conventions & style | [docs/reference/conventions.md](docs/reference/conventions.md) |
+| Run it as a service (ops track) | [docs/reference/operations.md](docs/reference/operations.md) |
 | Troubleshooting | [docs/reference/troubleshooting.md](docs/reference/troubleshooting.md) |
 | LangGraph concepts & vocabulary | [docs/reference/LEARNING.md](docs/reference/LEARNING.md) |
 | MCP server (Claude Desktop) | [docs/mcp.md](docs/mcp.md) |

@@ -8,6 +8,7 @@ Start at [AGENTS.md](../AGENTS.md). In an AI outage, this index is your map.
 | Set up locally | [reference/setup.md](reference/setup.md) |
 | Understand the system | [reference/architecture.md](reference/architecture.md) |
 | Conventions & style | [reference/conventions.md](reference/conventions.md) |
+| Run it as a service (ops track) | [reference/operations.md](reference/operations.md) |
 | Fix something broken | [reference/troubleshooting.md](reference/troubleshooting.md) |
 | Learn LangGraph vocabulary | [reference/LEARNING.md](reference/LEARNING.md) |
 | Run the evaluation suite | [../evals/README.md](../evals/README.md) |

@@ -19,3 +19,4 @@ These are *proposals*, not decisions. A proposal that gets built should have its
 | # | Title | Status |
 |---|-------|--------|
 | [0001](0001-source-router.md) | Source router: pluggable, classified research sources | Proposed |
+| [0002](0002-hosting-auspex.md) | Hosting Auspex: online MCP server, daily-report to customer-grade | Proposed |
