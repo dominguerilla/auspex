@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-12
+last_verified: 2026-06-15
 sources: [auspex/mcp_server/server.py, auspex/mcp_server/__main__.py, requirements.txt]
 owner: Carlos
 status: draft
@@ -91,14 +91,32 @@ job is unknown or not yet done.
 
 ## Running locally
 
+There are two transport modes:
+
+**stdio** (default) — for Claude Desktop and other local MCP clients that launch the server as a subprocess:
 ```bash
-# From the project root with the virtualenv active:
 python -m auspex.mcp_server
 ```
 
-The server reads JSON-RPC messages from stdin and writes to stdout (stdio
-transport). LLM provider configuration uses the same environment variables
-as the CLI — see [README.md](../README.md#setup) for details.
+**HTTP** — for remote MCP clients on the same network (e.g. a Hermes agent on a Raspberry Pi):
+```bash
+# Recommended: require a bearer token
+AUSPEX_MCP_TOKEN=<a-long-random-secret> python -m auspex.mcp_server --http
+# Windows PowerShell:
+#   $env:AUSPEX_MCP_TOKEN = "<secret>"; python -m auspex.mcp_server --http
+```
+
+Serves at `http://<your-ip>:<port>/mcp` (default port 8765, override with `--port`).
+Binds to all interfaces by default so LAN clients can reach it.
+
+**Authentication.** If `AUSPEX_MCP_TOKEN` is set, every HTTP request must carry an
+`Authorization: Bearer <token>` header; requests without it get `401 Unauthorized`.
+If the variable is unset, the endpoint is **unauthenticated** and the server logs a
+warning at startup — only appropriate on a fully trusted network. (stdio mode has no
+network surface and ignores this variable.)
+
+LLM provider configuration uses the same environment variables as the CLI in both
+modes — see [README.md](../README.md#setup) for details.
 
 ## Claude Desktop configuration
 
@@ -220,14 +238,47 @@ pip install "mcp[cli]>=1.2.0"
 **Jobs persist across server restarts but sources don't**
 
 This is expected. The final Markdown report is stored in `jobs.db` and
-survives restarts. The scraped source details are held in-memory only and
-are lost when the server process exits.
+survives restarts. The scraped source details are held in-memory only.
 
-## Roadmap (v2+)
+Additionally, a completed job is evicted from the in-memory store once its
+report has been retrieved via `get_research_report` (to bound memory use).
+After eviction, `get_research_status` and `get_research_report` still resolve
+the status and report from `jobs.db`, but `sources` will be empty — they are
+only returned on the **first** `get_research_report` call for a job.
 
-- **HTTP transport**: Mount the MCP server at `/mcp` on the existing FastAPI
-  app so the HF Spaces deployment serves it too (bearer-token auth required).
+## Hermes agent (Raspberry Pi / LAN)
+
+Start the server in HTTP mode on your desktop, with a bearer token:
+```bash
+AUSPEX_MCP_TOKEN=<a-long-random-secret> python -m auspex.mcp_server --http
+# Listening on http://0.0.0.0:8765/mcp
+```
+
+Then add it to `~/.hermes/config.yaml` on the Pi:
+```yaml
+mcp_servers:
+  auspex:
+    url: "http://10.0.0.37:8765/mcp"
+    headers:
+      Authorization: "Bearer <a-long-random-secret>"
+```
+
+Replace `10.0.0.37` with your desktop's IP on the shared subnet (verify with
+`ipconfig` on Windows) and use the same secret in both places. Port 8765 is the
+default; override with `--port`. If you omit `AUSPEX_MCP_TOKEN` on the server,
+drop the `headers` block on the Pi too — but then anyone on the network can
+reach the endpoint.
+
+The server process must stay running while the Pi agent is active. Consider
+running it in a terminal with the virtualenv active, or wrapping it in a
+Windows service (NSSM / Task Scheduler) for persistence.
+
+## Roadmap
+
+- **HTTPS**: TLS for the HTTP transport (e.g. via `mkcert` on the LAN) so the
+  bearer token and traffic aren't sent in the clear.
 - **Job cancellation**: Allow clients to cancel an in-flight job.
 - **Progress notifications**: Emit MCP progress notifications from `_run_job`
   so clients receive live node updates without polling.
-- **Rate limiting / multi-tenancy**: Per-client job quotas.
+- **HF Spaces HTTP endpoint**: Mount at `/mcp` on the FastAPI app so the
+  deployed Space serves MCP over the public URL.

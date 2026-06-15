@@ -1,6 +1,6 @@
 ---
-last_verified: 2026-06-12
-sources: [graph/graph_builder.py, graph/state.py, graph/edges.py, agents/, llm/ollama_client.py, llm/contract.py, tools/, app.py, auspex/mcp_server/server.py, prompts/]
+last_verified: 2026-06-15
+sources: [graph/graph_builder.py, graph/state.py, graph/edges.py, agents/, llm/ollama_client.py, llm/contract.py, tools/, app.py, auspex/mcp_server/server.py, auspex/mcp_server/__main__.py, prompts/]
 owner: Carlos
 status: draft
 ---
@@ -185,9 +185,9 @@ Each `node_complete` event carries a `payload` built by `build_node_payload(node
 
 ## MCP Server (`auspex/mcp_server/`)
 
-A third entrypoint that exposes the pipeline as MCP tools (`start_research`, `get_research_status`, `get_research_report`) and a resource (`research://{job_id}`) for Claude Desktop and other MCP clients. Launched via `python -m auspex.mcp_server` (stdio transport).
+A third entrypoint that exposes the pipeline as MCP tools (`start_research`, `get_research_status`, `get_research_report`) and a resource (`research://{job_id}`) for Claude Desktop and other MCP clients. Two transports: `python -m auspex.mcp_server` (stdio, default) and `--http` (streamable HTTP at `/mcp`, for remote LAN clients).
 
-Design: `start_research` enqueues a job via `asyncio.create_task()` and returns immediately; clients poll `get_research_status`. The server holds its own in-memory job dict (`_mcp_jobs`) and shares `jobs.db` for persistence on completion. It imports `build_graph()` directly — it does not import `app.py`.
+Design: `start_research` enqueues a job via `asyncio.create_task()` and returns immediately; clients poll `get_research_status`. The server holds its own in-memory job dict (`_mcp_jobs`) and shares `jobs.db` for persistence on completion. A completed job is evicted from `_mcp_jobs` once its report is retrieved (subsequent reads fall back to `jobs.db`). The HTTP transport disables FastMCP's localhost-only DNS-rebinding guard and gates requests behind an optional `AUSPEX_MCP_TOKEN` bearer token (`build_http_app()` + `BearerAuthMiddleware`). It imports `build_graph()` directly — it does not import `app.py`.
 
 See [docs/mcp.md](../mcp.md) for client configuration and tool reference.
 

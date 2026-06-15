@@ -348,3 +348,107 @@ async def test_resource_raises_when_not_done(patched_server):
 
     with pytest.raises(ValueError):
         await patched_server.research_report_resource(job_id)
+
+
+# ---------------------------------------------------------------------------
+# In-memory job eviction (memory-leak fix)
+# ---------------------------------------------------------------------------
+
+
+async def test_report_evicts_completed_job(patched_server):
+    """A done job is dropped from _mcp_jobs after its report is retrieved."""
+    result = await patched_server.start_research("evict me")
+    job_id = result["job_id"]
+    await asyncio.sleep(0.1)
+    assert job_id in patched_server._mcp_jobs
+
+    report = await patched_server.get_research_report(job_id)
+    assert report["status"] == "done"
+    assert report["sources"]  # sources present on first retrieval
+    assert job_id not in patched_server._mcp_jobs  # evicted
+
+
+async def test_status_after_eviction_falls_back_to_sqlite(patched_server):
+    """After eviction, status still resolves via the SQLite fallback."""
+    result = await patched_server.start_research("evict then status")
+    job_id = result["job_id"]
+    await asyncio.sleep(0.1)
+    await patched_server.get_research_report(job_id)  # triggers eviction
+    assert job_id not in patched_server._mcp_jobs
+
+    status = await patched_server.get_research_status(job_id)
+    assert status["status"] == "done"
+
+
+async def test_running_job_not_evicted(patched_server):
+    """A non-terminal job is never evicted on report retrieval."""
+    result = await patched_server.start_research("still running")
+    job_id = result["job_id"]
+    patched_server._mcp_jobs[job_id]["status"] = "running"
+
+    report = await patched_server.get_research_report(job_id)
+    assert report["report"] is None
+    assert job_id in patched_server._mcp_jobs
+
+
+# ---------------------------------------------------------------------------
+# HTTP transport + bearer auth
+# ---------------------------------------------------------------------------
+
+
+def test_build_http_app_disables_transport_security():
+    """Regression: --http must clear the localhost-only DNS-rebinding guard.
+
+    Without this, LAN clients are rejected with 421 Misdirected Request.
+    """
+    import auspex.mcp_server.server as srv
+
+    # Simulate the locked-down value FastMCP sets for host=127.0.0.1.
+    srv.mcp.settings.transport_security = object()
+    srv.build_http_app(token=None)
+    assert srv.mcp.settings.transport_security is None
+
+
+def _dummy_asgi_app():
+    from starlette.applications import Starlette
+    from starlette.responses import PlainTextResponse
+    from starlette.routing import Route
+
+    async def ok(request):
+        return PlainTextResponse("ok")
+
+    return Starlette(routes=[Route("/mcp", ok)])
+
+
+def test_bearer_auth_allows_correct_token():
+    from starlette.testclient import TestClient
+
+    from auspex.mcp_server.server import BearerAuthMiddleware
+
+    app = BearerAuthMiddleware(_dummy_asgi_app(), token="s3cret")
+    client = TestClient(app)
+    resp = client.get("/mcp", headers={"Authorization": "Bearer s3cret"})
+    assert resp.status_code == 200
+    assert resp.text == "ok"
+
+
+def test_bearer_auth_rejects_wrong_token():
+    from starlette.testclient import TestClient
+
+    from auspex.mcp_server.server import BearerAuthMiddleware
+
+    app = BearerAuthMiddleware(_dummy_asgi_app(), token="s3cret")
+    client = TestClient(app)
+    resp = client.get("/mcp", headers={"Authorization": "Bearer nope"})
+    assert resp.status_code == 401
+
+
+def test_bearer_auth_rejects_missing_header():
+    from starlette.testclient import TestClient
+
+    from auspex.mcp_server.server import BearerAuthMiddleware
+
+    app = BearerAuthMiddleware(_dummy_asgi_app(), token="s3cret")
+    client = TestClient(app)
+    resp = client.get("/mcp")
+    assert resp.status_code == 401

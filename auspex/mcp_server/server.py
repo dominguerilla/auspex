@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import secrets
 import sqlite3
 import time
 import uuid
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from starlette.responses import JSONResponse
 
 from graph.graph_builder import build_graph
 
@@ -241,12 +243,19 @@ async def get_research_report(job_id: str) -> dict:
     """
     job = _mcp_jobs.get(job_id)
     if job is not None:
-        return {
+        response = {
             "job_id": job_id,
             "status": job["status"],
             "report": job["report"],
             "sources": job["sources"],
         }
+        # Once a terminal job's report has been retrieved, drop it from the
+        # in-memory store to bound memory use. Status and report remain
+        # available via the SQLite fallback below; sources are not persisted,
+        # so they are only returned on this first retrieval (see docs/mcp.md).
+        if job["status"] in ("done", "error"):
+            _mcp_jobs.pop(job_id, None)
+        return response
     db_row = _read_job_from_db(job_id)
     if db_row is None:
         raise ValueError(f"Unknown job_id: {job_id!r}")
@@ -277,6 +286,50 @@ async def research_report_resource(job_id: str) -> str:
             "Call get_research_status to check progress."
         )
     return db_row["report"]
+
+
+# ---------------------------------------------------------------------------
+# HTTP transport (remote MCP clients on the LAN)
+# ---------------------------------------------------------------------------
+
+class BearerAuthMiddleware:
+    """Pure-ASGI middleware enforcing a static bearer token on HTTP requests.
+
+    Implemented at the ASGI layer (not Starlette's BaseHTTPMiddleware) so it
+    does not buffer or interfere with the streamable-HTTP transport's
+    long-lived responses. Non-HTTP scopes (lifespan, websocket) pass through
+    untouched so the inner app's startup/shutdown still runs.
+    """
+
+    def __init__(self, app, token: str):
+        self._app = app
+        self._expected = f"Bearer {token}"
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        headers = dict(scope.get("headers") or [])
+        provided = headers.get(b"authorization", b"").decode("latin-1")
+        if not secrets.compare_digest(provided, self._expected):
+            await JSONResponse({"error": "unauthorized"}, status_code=401)(scope, receive, send)
+            return
+        await self._app(scope, receive, send)
+
+
+def build_http_app(token: str | None = None):
+    """Build the streamable-HTTP ASGI app for the MCP server.
+
+    Disables FastMCP's localhost-only DNS-rebinding protection (which it
+    auto-enables when constructed with the default host=127.0.0.1) so that
+    LAN clients are not rejected with 421 Misdirected Request. When ``token``
+    is provided, every HTTP request must carry ``Authorization: Bearer <token>``.
+    """
+    mcp.settings.transport_security = None
+    app = mcp.streamable_http_app()
+    if token:
+        app = BearerAuthMiddleware(app, token)
+    return app
 
 
 # Create the DB table on first import (idempotent).
