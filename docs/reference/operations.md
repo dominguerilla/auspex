@@ -104,9 +104,10 @@ Three things separate "I built a thing" from "someone relies on my thing":
 | | Item | Rung |
 |---|---|---|
 | ☐ | Job store on managed Postgres, not local SQLite (see 0002) | D |
+| ☐ | Durable `sources` table (cross-run scrape cache + provenance — schema in 0002) | D |
+| ☐ | Alembic migrations replace the hand-rolled `_init_db` ALTER (decided — see 0002) | D |
 | ☐ | Automated backups enabled | D |
 | ☐ | **A restore actually tested** (delete-and-recover in a safe env) | D |
-| ☐ | Real schema migrations (Alembic), retiring the hand-rolled `_init_db` ALTER | S |
 | ☐ | Retention policy for old jobs / reports | S |
 
 **Skill:** backups + restore drills, migrations, data lifecycle.
@@ -170,7 +171,7 @@ boxes to call rung 1 done:
 
 - 1.2, 1.3 (deployed via IaC) · 2.2, 2.3, 2.4 (API keys, TLS, vault) ·
   3.2, 3.3 (logs + the one alert) · 4.1, 4.2 (health check + restart) ·
-  5.1, 5.2, 5.3 (Postgres + tested backup) · 6.3 (rollback path) ·
+  5.1–5.5 (Postgres + sources + Alembic + tested backup) · 6.3 (rollback path) ·
   7.1, 7.2 (cost known + budgeted) · 8.1 (the runbook).
 
 Everything marked **S** is the swarm rung — climb it only when real load arrives.
