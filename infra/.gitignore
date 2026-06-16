@@ -1,0 +1,10 @@
+# Terraform state + local config — never commit
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+crash.log
+crash.*.log
+override.tf
+override.tf.json

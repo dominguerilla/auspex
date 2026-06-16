@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+# Secrets can also be passed via env vars: TF_VAR_db_password, TF_VAR_mcp_token,
+# TF_VAR_llm_api_key.
+
+aws_region = "us-east-1"
+app_name   = "auspex-mcp"
+
+# --- secrets (do NOT commit real values) ---
+db_password = "change-me-strong-db-password"
+mcp_token   = "change-me-long-random-bearer-token"
+
+# --- LLM provider (see llm/ollama_client.py for provider names + key env vars) ---
+llm_provider    = "openai_compatible"
+llm_api_key_env = "OPENAI_API_KEY"
+llm_api_key     = "sk-..."
+
+# Image tag App Runner deploys (push this tag to ECR first).
+image_tag = "latest"

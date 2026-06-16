@@ -46,9 +46,9 @@ Three things separate "I built a thing" from "someone relies on my thing":
 
 | | Item | Rung |
 |---|---|---|
-| ◐ | Containerized (`Dockerfile` exists; deploys to HF Spaces via `deploy-hf-spaces.yml`) | D |
-| ☐ | Deployed to the chosen cloud (AWS / Azure — see 0002) as a long-running service | D |
-| ☐ | Infrastructure defined as code (Terraform / Bicep), not click-ops | D |
+| ◐ | Containerized (`Dockerfile` + `deploy/entrypoint-mcp.sh` for the MCP server) | D |
+| ☐ | Deployed to AWS App Runner as a long-running service (run `terraform apply`) | D |
+| ◐ | Infrastructure defined as code — Terraform in `infra/` (written; not yet applied) | D |
 | ☐ | Separate config per environment; no prod values baked into the image | D |
 | ☐ | A staging environment that mirrors prod for testing changes | S |
 
