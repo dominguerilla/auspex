@@ -1,0 +1,4 @@
+# Shell scripts must keep LF endings or they break on Linux (the shebang's
+# trailing \r makes the interpreter "bash\r" — not found). Critical for
+# deploy/entrypoint-mcp.sh, which App Runner runs on Linux.
+*.sh text eol=lf
