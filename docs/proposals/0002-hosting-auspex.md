@@ -351,8 +351,9 @@ scores. **Does it change resolved decisions? Mostly no, and here's why:**
   tables. Still fine as raw SQL, but this is precisely the "handful of related
   tables" point at which revisiting SQLAlchemy + autogenerate earns its cost.
 
-Worth its own proposal (0003) when picked up; the scoring path would read a stored
-run and feed `evals/scorers.py` directly, bypassing `graph.invoke` (no re-research).
+Designed in [0003](0003-scheduled-evals.md); the scoring path reuses the existing
+`evals/generate.py` + `evals/run.py --from-outputs` split, reading a stored run and
+feeding `evals/scorers.py` directly, bypassing `graph.invoke` (no re-research).
 
 ## Prior art
 
