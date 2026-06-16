@@ -18,4 +18,5 @@ Items marked `(inferred)` were reconstructed from code and git history; confirm 
 |---|---|---|
 | [0001](0001-fastapi-over-streamlit.md) | Replace Streamlit with FastAPI + custom frontend | Accepted *(inferred)* |
 | [0002](0002-typeddict-for-state.md) | Use TypedDict (not Pydantic) for LangGraph state | Accepted *(inferred)* |
-| [0003](0003-sqlite-job-persistence.md) | Use SQLite for completed-job persistence in the web server | Accepted *(inferred)* |
+| [0003](0003-sqlite-job-persistence.md) | Use SQLite for completed-job persistence in the web server | Accepted *(inferred)* · scoped by 0004 |
+| [0004](0004-host-mcp-server-on-aws-postgres.md) | Host the MCP server on AWS with Postgres-backed state | Accepted |

@@ -206,14 +206,19 @@ guarded entrypoint), never concurrently from every replica.
 
 ### Execution: in-process now, queue later
 
-At the daily-report rung, keep `create_task` but run **one worker process** (the
-same container image, a `--worker` entrypoint) that owns execution, while the
-**server** only enqueues and reads. Even with an in-memory queue this enforces the
-separation that matters.
+**Decided ([ADR 0004](../adr/0004-host-mcp-server-on-aws-postgres.md)): v1 keeps
+execution in-process** (`create_task`), single-instance. The web↔worker split and
+scale-to-zero are **deferred to v1.1** — analysis showed the split is cleanly
+*backfillable* precisely because v1 already externalizes state to Postgres and runs
+stateless, so the non-backfillable foundation is in place. v1's job is to leave the
+seam clean: `_run_job` must depend only on state that flows through Postgres, never
+on server-process memory.
 
-At the swarm rung, swap the in-memory queue for a real one (Arq/Celery/RQ, or
-cloud-native SQS / Azure Service Bus) and run a **worker pool**. Because the server
-is already stateless and state already lives in Postgres, this is additive.
+At the v1.1 / swarm rung, relocate `_run_job` to a `--worker` entrypoint (same image)
+fed by a queue — SQS with an autoscaling (min=0) Fargate worker for true scale-to-
+zero; use Fargate not Lambda (a thorough run can exceed Lambda's 15-min cap). Because
+the server is already stateless and state already lives in Postgres, this is additive
+and changes no MCP tool contract.
 
 ### Auth model
 
@@ -261,21 +266,20 @@ one-flag change; enable it when the hosted (multi-replica-capable) deployment is
 built — harmless at single-instance, and one instance otherwise *hides* the
 sticky-session requirement until you scale out.
 
-### Deployment platform (AWS / Azure undecided)
+### Deployment platform — decided: AWS
 
-Both clouds are the same shape; the existing `Dockerfile` is the portable asset:
+**Decided ([ADR 0004](../adr/0004-host-mcp-server-on-aws-postgres.md)):** AWS, with a
+**cloud LLM API** (OpenAI/Anthropic/Nous) backend. The existing `Dockerfile` is the
+portable asset.
 
-| Need | AWS | Azure |
-|---|---|---|
-| Run the container | ECS/Fargate or App Runner | Container Apps |
-| Job state | RDS for PostgreSQL | Azure Database for PostgreSQL |
-| Queue (swarm rung) | SQS | Service Bus / Storage Queues |
-| Secrets | Secrets Manager | Key Vault |
-| TLS / ingress | ALB + ACM | Container Apps ingress / App Gateway |
-| Scheduled daily call | EventBridge Scheduler | Logic Apps / Scheduler |
-
-Pick one and don't abstract over both — portability lives in the container, not in
-a cloud-agnostic layer.
+| Need | AWS service |
+|---|---|
+| Run the container | App Runner (least plumbing) or ECS/Fargate |
+| Job state | RDS for PostgreSQL |
+| Queue (swarm rung, deferred) | SQS |
+| Secrets | Secrets Manager |
+| TLS / ingress | App Runner built-in, or ALB + ACM |
+| Scheduled daily call | EventBridge Scheduler |
 
 ---
 

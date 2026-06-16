@@ -2,9 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | Accepted *(inferred — confirm)* |
+| **Status** | Accepted *(inferred — confirm)* · scoped by [0004](0004-host-mcp-server-on-aws-postgres.md) |
 | **Date** | 2026-05-28 (inferred from "Use FASTAPI + stepper frontend, job queuing, shareable report URLs") |
 | **Evidence** | `app.py:54-78`, `app.py:195-213`, `README.md:138-139` |
+
+> **Scoped by [0004](0004-host-mcp-server-on-aws-postgres.md):** this decision stands
+> for the **web server** (`app.py`) on HF Spaces. The **MCP server** diverges to
+> Postgres on AWS and no longer shares `jobs.db` with `app.py`.
 
 ## Context
 

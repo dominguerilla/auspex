@@ -27,6 +27,12 @@ python-dotenv==1.2.2
 # MCP server
 mcp[cli]>=1.2.0
 
+# Postgres-backed MCP job store (see docs/adr/0004)
+# psycopg2 (not psycopg3): psycopg3's bundled libpq crashes in-process with the
+# langchain/langgraph native stack on Windows; psycopg2-binary is immune.
+psycopg2-binary>=2.9
+alembic>=1.13
+
 # Testing / linting
 pytest==9.0.2
 pytest-asyncio>=0.23
