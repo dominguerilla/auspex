@@ -1,6 +1,6 @@
 ---
-last_verified: 2026-06-15
-sources: [auspex/mcp_server/server.py, auspex/mcp_server/__main__.py, requirements.txt]
+last_verified: 2026-06-16
+sources: [auspex/mcp_server/server.py, auspex/mcp_server/__main__.py, alembic/, docker-compose.yml, requirements.txt]
 owner: Carlos
 status: draft
 ---
@@ -89,6 +89,22 @@ research://{job_id}
 Returns the raw Markdown report string for a completed job. Raises if the
 job is unknown or not yet done.
 
+## Database
+
+The server stores jobs and sources in **Postgres** (see [docs/adr/0004](adr/0004-host-mcp-server-on-aws-postgres.md)).
+Set `DATABASE_URL` (default: the local `docker-compose` database
+`postgresql://auspex:auspex@localhost:5432/auspex`) and apply migrations before
+serving:
+
+```bash
+docker compose up -d          # local Postgres
+alembic upgrade head          # create / update the schema
+```
+
+> **Windows note:** on native Windows, psycopg/libpq conflicts with the langgraph
+> native stack in-process, so the Postgres-backed server can't run there. Use WSL2
+> (Linux) for local runs; the hosted deployment is Linux and unaffected.
+
 ## Running locally
 
 There are two transport modes:
@@ -135,6 +151,7 @@ the app.
       "args": ["-m", "auspex.mcp_server"],
       "cwd": "/absolute/path/to/research-agent",
       "env": {
+        "DATABASE_URL": "postgresql://auspex:auspex@localhost:5432/auspex",
         "LLM_PROVIDER": "ollama",
         "OLLAMA_BASE_URL": "http://localhost:11434",
         "OLLAMA_MODEL": "qwen2.5:3b"
@@ -154,6 +171,7 @@ the app.
       "args": ["-m", "auspex.mcp_server"],
       "cwd": "C:\\Projects\\AI\\research-agent",
       "env": {
+        "DATABASE_URL": "postgresql://auspex:auspex@localhost:5432/auspex",
         "LLM_PROVIDER": "ollama",
         "OLLAMA_BASE_URL": "http://localhost:11434",
         "OLLAMA_MODEL": "qwen2.5:3b"

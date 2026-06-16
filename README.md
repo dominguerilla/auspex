@@ -162,6 +162,7 @@ research jobs directly as tool calls.
       "args": ["-m", "auspex.mcp_server"],
       "cwd": "/absolute/path/to/research-agent",
       "env": {
+        "DATABASE_URL": "postgresql://auspex:auspex@localhost:5432/auspex",
         "LLM_PROVIDER": "ollama",
         "OLLAMA_BASE_URL": "http://localhost:11434",
         "OLLAMA_MODEL": "qwen2.5:3b"
@@ -170,6 +171,10 @@ research jobs directly as tool calls.
   }
 }
 ```
+
+> The MCP server stores jobs in Postgres — run `docker compose up -d` and
+> `alembic upgrade head` first. See [docs/mcp.md](docs/mcp.md). (On native Windows
+> use WSL2; the Postgres-backed server can't run there — see the doc.)
 
 3. Restart Claude Desktop. Three tools appear: **start_research**,
    **get_research_status**, **get_research_report**.

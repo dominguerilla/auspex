@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-15
+last_verified: 2026-06-16
 sources: [Dockerfile, .github/workflows/deploy-hf-spaces.yml, auspex/mcp_server/__main__.py, auspex/mcp_server/server.py]
 owner: Carlos
 status: draft
@@ -103,9 +103,9 @@ Three things separate "I built a thing" from "someone relies on my thing":
 
 | | Item | Rung |
 |---|---|---|
-| ☐ | Job store on managed Postgres, not local SQLite (see 0002) | D |
-| ☐ | Durable `sources` table (cross-run scrape cache + provenance — schema in 0002) | D |
-| ☐ | Alembic migrations replace the hand-rolled `_init_db` ALTER (decided — see 0002) | D |
+| ◐ | Job store on Postgres, not SQLite (code done — see 0004; managed RDS deployment pending) | D |
+| ☑ | Durable `sources` table (cross-run scrape cache + provenance) | D |
+| ☑ | Alembic migrations replace the hand-rolled `_init_db` ALTER | D |
 | ☐ | Automated backups enabled | D |
 | ☐ | **A restore actually tested** (delete-and-recover in a safe env) | D |
 | ☐ | Retention policy for old jobs / reports | S |

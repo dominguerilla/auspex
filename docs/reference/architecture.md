@@ -1,6 +1,6 @@
 ---
-last_verified: 2026-06-15
-sources: [graph/graph_builder.py, graph/state.py, graph/edges.py, agents/, llm/ollama_client.py, llm/contract.py, tools/, app.py, auspex/mcp_server/server.py, auspex/mcp_server/__main__.py, prompts/]
+last_verified: 2026-06-16
+sources: [graph/graph_builder.py, graph/state.py, graph/edges.py, agents/, llm/ollama_client.py, llm/contract.py, tools/, app.py, auspex/mcp_server/server.py, auspex/mcp_server/__main__.py, alembic/, prompts/]
 owner: Carlos
 status: draft
 ---
@@ -17,7 +17,7 @@ Three entrypoints drive the same graph:
 |---|---|---|
 | `main.py` | `graph.invoke(initial_state)` (synchronous) | Markdown file written to `output/` |
 | `app.py` | `graph.astream(initial_state)` (async) | SSE events → React frontend; completed job stored in `jobs.db` |
-| `auspex/mcp_server/` | `graph.astream(initial_state)` (async, background task) | MCP tool responses over stdio; completed job stored in `jobs.db` |
+| `auspex/mcp_server/` | `graph.astream(initial_state)` (async, background task) | MCP tool responses (stdio/HTTP); completed job + sources stored in **Postgres** |
 
 ---
 
@@ -187,7 +187,7 @@ Each `node_complete` event carries a `payload` built by `build_node_payload(node
 
 A third entrypoint that exposes the pipeline as MCP tools (`start_research`, `get_research_status`, `get_research_report`) and a resource (`research://{job_id}`) for Claude Desktop and other MCP clients. Two transports: `python -m auspex.mcp_server` (stdio, default) and `--http` (streamable HTTP at `/mcp`, for remote LAN clients).
 
-Design: `start_research` enqueues a job via `asyncio.create_task()` and returns immediately; clients poll `get_research_status`. The server holds its own in-memory job dict (`_mcp_jobs`) and shares `jobs.db` for persistence on completion. A completed job is evicted from `_mcp_jobs` once its report is retrieved (subsequent reads fall back to `jobs.db`). The HTTP transport disables FastMCP's localhost-only DNS-rebinding guard and gates requests behind an optional `AUSPEX_MCP_TOKEN` bearer token (`build_http_app()` + `BearerAuthMiddleware`). It imports `build_graph()` directly — it does not import `app.py`.
+Design: `start_research` enqueues a job via `asyncio.create_task()` and returns immediately; clients poll `get_research_status`. The server holds a `_mcp_jobs` in-memory cache and persists jobs + sources to **Postgres** on completion (psycopg2, schema owned by Alembic — see [docs/adr/0004](../adr/0004-host-mcp-server-on-aws-postgres.md)). A completed job is evicted from `_mcp_jobs` once its report is retrieved; later reads fall back to Postgres (sources are durable there). All DB calls run via `asyncio.to_thread` so blocking libpq I/O never stalls the event loop. The HTTP transport disables FastMCP's localhost-only DNS-rebinding guard and gates requests behind an optional `AUSPEX_MCP_TOKEN` bearer token (`build_http_app()` + `BearerAuthMiddleware`). It imports `build_graph()` directly — it does not import `app.py`, and uses its own store (not `app.py`'s SQLite `jobs.db`).
 
 See [docs/mcp.md](../mcp.md) for client configuration and tool reference.
 
