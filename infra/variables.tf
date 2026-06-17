@@ -86,3 +86,15 @@ variable "max_instances" {
   type        = number
   default     = 2
 }
+
+variable "llm_model_env" {
+  description = "Env var the provider reads its model from (e.g. ANTHROPIC_MODEL, OPENAI_MODEL). Only used when llm_model is set."
+  type        = string
+  default     = "ANTHROPIC_MODEL"
+}
+
+variable "llm_model" {
+  description = "Model ID to pin (e.g. claude-sonnet-4-6). Empty = the provider's built-in default (Anthropic: claude-haiku-4-5)."
+  type        = string
+  default     = ""
+}

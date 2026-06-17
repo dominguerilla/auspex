@@ -50,6 +50,16 @@ resource "google_cloud_run_v2_service" "this" {
         value = var.llm_provider
       }
 
+      # Pin the model only when llm_model is set; otherwise the provider falls
+      # back to its built-in default (Anthropic: claude-haiku-4-5).
+      dynamic "env" {
+        for_each = var.llm_model != "" ? [1] : []
+        content {
+          name  = var.llm_model_env
+          value = var.llm_model
+        }
+      }
+
       env {
         name = "DATABASE_URL"
         value_source {

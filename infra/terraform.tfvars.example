@@ -11,9 +11,12 @@ db_password = "change-me-strong-db-password"
 mcp_token   = "change-me-long-random-bearer-token"
 
 # --- LLM provider (see llm/ollama_client.py for provider names + key env vars) ---
-llm_provider    = "openai_compatible"
-llm_api_key_env = "OPENAI_API_KEY"
-llm_api_key     = "sk-..."
+# Anthropic (Claude) — defaults to Haiku 4.5; set llm_model for Sonnet.
+llm_provider    = "anthropic"
+llm_api_key_env = "ANTHROPIC_API_KEY"
+llm_api_key     = "sk-ant-..."
+# llm_model_env = "ANTHROPIC_MODEL"
+# llm_model     = "claude-sonnet-4-6"   # default when unset: claude-haiku-4-5
 
 # Image tag Cloud Run deploys (push this tag to Artifact Registry first).
 image_tag = "latest"

@@ -1,9 +1,11 @@
-"""Tests for llm.ollama_client.describe_llm()."""
+"""Tests for llm.ollama_client.describe_llm() and the Anthropic provider."""
 
 import os
 from unittest.mock import patch
 
-from llm.ollama_client import describe_llm
+import pytest
+
+from llm.ollama_client import _anthropic_accepts_temperature, describe_llm, get_llm
 
 
 def test_describe_defaults_to_ollama_qwen():
@@ -98,3 +100,81 @@ def test_describe_unknown_provider_falls_back_to_raw_label():
     assert info["model"] == ""
     # Unknown providers fall through to their raw name as label.
     assert info["provider_label"] == "vllm"
+
+
+# --- Anthropic provider: describe_llm() reporting ---
+
+
+def test_describe_anthropic_with_defaults():
+    with patch.dict(os.environ, {"LLM_PROVIDER": "anthropic"}, clear=True):
+        info = describe_llm()
+    assert info == {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5",
+        "provider_label": "Anthropic",
+    }
+
+
+def test_describe_respects_anthropic_model_override():
+    with patch.dict(
+        os.environ, {"LLM_PROVIDER": "anthropic", "ANTHROPIC_MODEL": "claude-sonnet-4-6"}, clear=True
+    ):
+        info = describe_llm()
+    assert info["model"] == "claude-sonnet-4-6"
+    assert info["provider_label"] == "Anthropic"
+
+
+# --- Anthropic provider: temperature gating (pure) ---
+
+
+def test_anthropic_accepts_temperature_for_haiku_and_sonnet():
+    assert _anthropic_accepts_temperature("claude-haiku-4-5")
+    assert _anthropic_accepts_temperature("claude-sonnet-4-6")
+
+
+def test_anthropic_rejects_temperature_for_opus_and_fable():
+    assert not _anthropic_accepts_temperature("claude-opus-4-8")
+    assert not _anthropic_accepts_temperature("claude-opus-4-7")
+    assert not _anthropic_accepts_temperature("claude-fable-5")
+
+
+# --- Anthropic provider: get_llm() construction (ChatAnthropic mocked) ---
+
+
+def test_get_llm_anthropic_builds_client_with_temperature():
+    pytest.importorskip("langchain_anthropic")
+    with (
+        patch("langchain_anthropic.ChatAnthropic") as mock_chat,
+        patch.dict(
+            os.environ,
+            {"LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "sk-ant-test"},
+            clear=True,
+        ),
+    ):
+        get_llm(temperature=0.3)
+    # Haiku 4.5 (the default) accepts temperature, so it is forwarded.
+    mock_chat.assert_called_once_with(
+        model="claude-haiku-4-5", api_key="sk-ant-test", temperature=0.3
+    )
+
+
+def test_get_llm_anthropic_omits_temperature_for_no_sampling_model():
+    pytest.importorskip("langchain_anthropic")
+    env = {
+        "LLM_PROVIDER": "anthropic",
+        "ANTHROPIC_API_KEY": "sk-ant-test",
+        "ANTHROPIC_MODEL": "claude-opus-4-8",
+    }
+    with (
+        patch("langchain_anthropic.ChatAnthropic") as mock_chat,
+        patch.dict(os.environ, env, clear=True),
+    ):
+        get_llm(temperature=0.3)
+    # Opus 4.8 rejects temperature, so it must not be passed.
+    mock_chat.assert_called_once_with(model="claude-opus-4-8", api_key="sk-ant-test")
+
+
+def test_get_llm_anthropic_requires_api_key():
+    with patch.dict(os.environ, {"LLM_PROVIDER": "anthropic"}, clear=True):
+        with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+            get_llm()

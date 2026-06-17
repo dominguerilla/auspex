@@ -7,7 +7,7 @@ its own LLM, so swapping providers is a config change — not a code change.
 
 Providers are declared once in the PROVIDERS registry. get_llm() constructs the
 client and describe_llm() reports it; both read the registry, so they cannot
-drift. There are only three construction paths:
+drift. There are four construction paths:
 
   LLM_PROVIDER=ollama            (default — local development)
     Reads OLLAMA_BASE_URL, OLLAMA_MODEL. Returns ChatOllama (native API).
@@ -15,6 +15,11 @@ drift. There are only three construction paths:
   LLM_PROVIDER=huggingface       (cloud deployment, e.g. HF Spaces)
     Reads HF_TOKEN, HF_MODEL. Returns ChatHuggingFace wrapping a
     HuggingFaceEndpoint that calls the HF Inference API.
+
+  LLM_PROVIDER=anthropic         (cloud deployment — Claude)
+    Reads ANTHROPIC_API_KEY, ANTHROPIC_MODEL. Returns ChatAnthropic (native
+    Anthropic API). temperature is forwarded only for models that accept it
+    (Haiku 4.5, Sonnet 4.6); newer models (Opus 4.8, Fable 5) reject it.
 
   OpenAI-compatible              (everything else — returns ChatOpenAI)
     Any registry entry with a "key_env" is reached through one shared path:
@@ -58,6 +63,15 @@ PROVIDERS: dict[str, dict] = {
         "model_env": "HF_MODEL",
         "default_model": "meta-llama/Llama-3.1-8B-Instruct",
     },
+    "anthropic": {
+        # Native Claude provider. No "key_env" here on purpose: that marker
+        # routes a provider through the shared OpenAI-compatible path, but
+        # Anthropic has its own branch in get_llm() (ChatAnthropic), so it must
+        # not carry it. Model IDs: https://docs.claude.com/en/docs/about-claude/models
+        "label": "Anthropic",
+        "model_env": "ANTHROPIC_MODEL",
+        "default_model": "claude-haiku-4-5",
+    },
     "nous": {
         # Model IDs are listed at https://portal.nousresearch.com/api-docs
         "label": "Nous Portal",
@@ -86,6 +100,23 @@ def _resolved_model(provider: str) -> str:
     """Model the given provider would use, honoring its model_env override."""
     spec = PROVIDERS[provider]
     return os.getenv(spec["model_env"], spec["default_model"])
+
+
+# Anthropic models that reject sampling params (temperature/top_p/top_k) — they
+# return HTTP 400 if temperature is sent. Current as of the Claude 4.x family
+# (2026-06); Haiku 4.5 and Sonnet 4.6 still accept it. The default is to forward
+# temperature, so a new model is treated as accepting it until proven otherwise.
+_ANTHROPIC_NO_SAMPLING = (
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-fable-5",
+    "claude-mythos-5",
+)
+
+
+def _anthropic_accepts_temperature(model: str) -> bool:
+    """Whether the given Anthropic model accepts a temperature parameter."""
+    return not model.startswith(_ANTHROPIC_NO_SAMPLING)
 
 
 def describe_llm() -> dict:
@@ -157,6 +188,8 @@ def get_llm(temperature: float = 0.3):
     HF_MODEL         : str  (default: meta-llama/Llama-3.1-8B-Instruct)
     NOUS_API_KEY     : str  (required when LLM_PROVIDER=nous)
     NOUS_MODEL       : str  (default: hermes-3-llama-3.1-70b)
+    ANTHROPIC_API_KEY: str  (required when LLM_PROVIDER=anthropic)
+    ANTHROPIC_MODEL  : str  (default: claude-haiku-4-5)
     OPENAI_BASE_URL  : str  (required when LLM_PROVIDER=openai_compatible)
     OPENAI_API_KEY   : str  (required when LLM_PROVIDER=openai_compatible)
     OPENAI_MODEL     : str  (required when LLM_PROVIDER=openai_compatible)
@@ -200,6 +233,29 @@ def get_llm(temperature: float = 0.3):
             max_new_tokens=1024,
         )
         return ChatHuggingFace(llm=endpoint)
+
+    if provider == "anthropic":
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set. "
+                "Generate a key at https://console.anthropic.com and export it "
+                "as ANTHROPIC_API_KEY."
+            )
+
+        model = _resolved_model("anthropic")
+        # Newer Claude models (Opus 4.8, Fable 5) reject temperature; Haiku 4.5
+        # and Sonnet 4.6 accept it. Only forward it when the model takes it, so
+        # the shared get_llm(temperature=...) contract degrades gracefully.
+        kwargs = {"model": model, "api_key": api_key}
+        if _anthropic_accepts_temperature(model):
+            kwargs["temperature"] = temperature
+
+        # Import after validation so a misconfig fails fast without dragging in
+        # the (heavy) Anthropic client — same pattern as _build_openai_compatible.
+        from langchain_anthropic import ChatAnthropic
+
+        return ChatAnthropic(**kwargs)
 
     # Every OpenAI-compatible provider (named preset or generic) shares one
     # construction path, marked in the registry by a "key_env" entry.
