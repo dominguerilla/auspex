@@ -2,7 +2,8 @@
 # Secrets can also be passed via env vars: TF_VAR_db_password, TF_VAR_mcp_token,
 # TF_VAR_llm_api_key.
 
-aws_region = "us-east-1"
+project_id = "your-gcp-project-id"
+region     = "us-central1"
 app_name   = "auspex-mcp"
 
 # --- secrets (do NOT commit real values) ---
@@ -14,5 +15,5 @@ llm_provider    = "openai_compatible"
 llm_api_key_env = "OPENAI_API_KEY"
 llm_api_key     = "sk-..."
 
-# Image tag App Runner deploys (push this tag to ECR first).
+# Image tag Cloud Run deploys (push this tag to Artifact Registry first).
 image_tag = "latest"

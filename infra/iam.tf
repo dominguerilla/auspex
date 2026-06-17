@@ -1,47 +1,32 @@
-# Access role: lets App Runner pull the image from (private) ECR.
-resource "aws_iam_role" "apprunner_access" {
-  name = "${var.app_name}-apprunner-access"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "build.apprunner.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
+# The identity Cloud Run runs as. GCP "assumes" it implicitly — no trust policy
+# to write (contrast AWS's two-role trust+permission model).
+resource "google_service_account" "runtime" {
+  account_id   = "${var.app_name}-run"
+  display_name = "Auspex MCP Cloud Run runtime"
 }
 
-resource "aws_iam_role_policy_attachment" "apprunner_ecr" {
-  role       = aws_iam_role.apprunner_access.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
+# Least privilege: allow the runtime SA to read *only* our three secrets.
+resource "google_secret_manager_secret_iam_member" "database_url" {
+  secret_id = google_secret_manager_secret.database_url.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime.email}"
 }
 
-# Instance role: lets the running service read its secrets at runtime.
-resource "aws_iam_role" "apprunner_instance" {
-  name = "${var.app_name}-apprunner-instance"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "tasks.apprunner.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
+resource "google_secret_manager_secret_iam_member" "mcp_token" {
+  secret_id = google_secret_manager_secret.mcp_token.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime.email}"
 }
 
-resource "aws_iam_role_policy" "apprunner_secrets" {
-  name = "${var.app_name}-secrets-read"
-  role = aws_iam_role.apprunner_instance.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = ["secretsmanager:GetSecretValue"]
-      Resource = [
-        aws_secretsmanager_secret.database_url.arn,
-        aws_secretsmanager_secret.mcp_token.arn,
-        aws_secretsmanager_secret.llm_api_key.arn,
-      ]
-    }]
-  })
+resource "google_secret_manager_secret_iam_member" "llm_api_key" {
+  secret_id = google_secret_manager_secret.llm_api_key.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+# Allow the runtime SA to open Cloud SQL connections (via the connector).
+resource "google_project_iam_member" "cloudsql_client" {
+  project = var.project_id
+  role    = "roles/cloudsql.client"
+  member  = "serviceAccount:${google_service_account.runtime.email}"
 }

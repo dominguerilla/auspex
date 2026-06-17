@@ -1,14 +1,14 @@
 output "service_url" {
   description = "Base HTTPS URL of the MCP server. Agents call <service_url>/mcp."
-  value       = "https://${aws_apprunner_service.this.service_url}"
+  value       = google_cloud_run_v2_service.this.uri
 }
 
-output "ecr_repository_url" {
-  description = "Push the image here before applying the App Runner service."
-  value       = aws_ecr_repository.this.repository_url
+output "artifact_registry_repo" {
+  description = "Push the image here (then bump image_tag if not 'latest')."
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/${var.app_name}"
 }
 
-output "rds_endpoint" {
-  description = "RDS Postgres endpoint (host)."
-  value       = aws_db_instance.postgres.address
+output "cloudsql_connection_name" {
+  description = "Cloud SQL instance connection name (PROJECT:REGION:INSTANCE)."
+  value       = google_sql_database_instance.postgres.connection_name
 }

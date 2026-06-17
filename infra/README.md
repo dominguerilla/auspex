@@ -1,106 +1,108 @@
-# Auspex MCP server — AWS infrastructure (Terraform)
+# Auspex MCP server — GCP infrastructure (Terraform)
 
-Provisions the hosted MCP server per [docs/adr/0004](../docs/adr/0004-host-mcp-server-on-aws-postgres.md):
-**App Runner** (HTTPS, the service) → **RDS PostgreSQL** (job store) via a **VPC
-connector**, with **Secrets Manager** for credentials and **ECR** for the image.
-Single instance, polished-core v1 (no worker split / scale-to-zero yet).
+Provisions the hosted MCP server on **Google Cloud Run** per
+[ADR 0004](../docs/adr/0004-host-mcp-server-on-aws-postgres.md):
+**Cloud Run** (HTTPS, the service) → **Cloud SQL PostgreSQL** (job store) via the
+built-in Cloud SQL connector, with **Secret Manager** for credentials and
+**Artifact Registry** for the image. See [ARCHITECTURE.md](ARCHITECTURE.md) for
+the diagram and a networking/IAM deep dive.
 
-> **Not apply-tested in this repo.** It was written without AWS credentials, so
-> treat it as a reviewed starting point: run `terraform fmt`, `terraform
-> validate`, and **read `terraform plan` carefully** before `apply`. It creates
-> billable resources.
+Chosen over AWS App Runner to avoid the ~$32/mo **NAT gateway** App Runner needs
+to reach both a private database and the internet — Cloud Run reaches the
+internet directly and Cloud SQL via a socket, so there's no VPC/NAT at all.
+
+> **Not apply-tested in this repo** (no GCP credentials here). Treat it as a
+> reviewed starting point: run `terraform fmt`, `terraform validate`, and read
+> `terraform plan` carefully before `apply`. It creates billable resources.
 
 ## What it creates
 
 | Resource | Purpose |
 |---|---|
-| `aws_db_instance.postgres` | RDS Postgres 16 (`db.t4g.micro`, free-tier-eligible), private |
-| `aws_ecr_repository.this` | Holds the container image |
-| `aws_secretsmanager_secret.*` | `DATABASE_URL`, `AUSPEX_MCP_TOKEN`, LLM API key |
-| `aws_apprunner_service.this` | The MCP server (HTTPS, port 8080), TCP health check |
-| `aws_apprunner_vpc_connector.this` | Lets App Runner reach RDS privately |
-| IAM roles + security groups | ECR pull, Secrets read, `RDS ← App Runner only` |
+| `google_cloud_run_v2_service.this` | The MCP server (HTTPS, port 8080), CPU always allocated |
+| `google_sql_database_instance.postgres` | Cloud SQL Postgres 16 (`db-f1-micro`) |
+| `google_artifact_registry_repository.this` | Holds the container image |
+| `google_secret_manager_secret.*` | `DATABASE_URL`, `AUSPEX_MCP_TOKEN`, LLM key |
+| `google_service_account.runtime` + IAM | Read secrets, connect to Cloud SQL |
+| `google_project_service.apis` | Enables run / sqladmin / secretmanager / AR |
 
 ## Prerequisites
 
-- Terraform ≥ 1.5, AWS CLI, and configured credentials (`aws configure`).
-- A working Docker to build/push the image (the build is a Linux image — the
-  Windows libpq/langgraph runtime conflict does **not** affect builds or the
-  Linux runtime).
+- Terraform ≥ 1.5 and the `gcloud` CLI.
+- A GCP project with **billing enabled**.
+- Authenticate:
+  ```bash
+  gcloud config set project YOUR_PROJECT_ID
+  gcloud auth application-default login            # credentials Terraform uses
+  gcloud auth configure-docker us-central1-docker.pkg.dev   # for docker push
+  ```
+- A working Docker to build/push the image (the Linux runtime conflict that
+  blocks native Windows does not affect builds or the Linux runtime).
 
 ## Deploy
 
-Because App Runner pulls the image at create time, ECR must exist and contain
-the image **before** the service is created — so this is a two-stage apply.
+Cloud Run pulls the image at deploy time, so Artifact Registry must exist and
+contain the image **before** the service is created — a two-stage apply.
 
 ```bash
 cd infra
-cp terraform.tfvars.example terraform.tfvars   # then fill in secrets
+cp terraform.tfvars.example terraform.tfvars   # then fill in project_id + secrets
 terraform init
 
-# 1. Create just the ECR repo first.
-terraform apply -target=aws_ecr_repository.this
+# 1. Create the Artifact Registry repo (and the API enablement it needs).
+terraform apply -target=google_artifact_registry_repository.this
 
 # 2. Build + push the image. Stay in infra/ (terraform output needs it); the
-#    Docker build context is the repo root (..), where the Dockerfile lives.
-REGION=us-east-1                              # match aws_region
-REPO=$(terraform output -raw ecr_repository_url)
-aws ecr get-login-password --region "$REGION" \
-  | docker login --username AWS --password-stdin "${REPO%/*}"
-docker build -t "$REPO:latest" ..
-docker push "$REPO:latest"
+#    Docker build context is the repo root (..).
+REPO=$(terraform output -raw artifact_registry_repo)
+docker build -t "$REPO/auspex-mcp:latest" ..
+docker push "$REPO/auspex-mcp:latest"
 
-# 3. Apply everything else (RDS takes ~10 min, then App Runner).
+# 3. Apply everything else (Cloud SQL takes ~5-10 min, then Cloud Run).
 terraform apply
 ```
 
 Get the URL:
 
 ```bash
-terraform output service_url      # https://xxxx.<region>.awsapprunner.com
+terraform output -raw service_url      # https://auspex-mcp-xxxx.<region>.run.app
 ```
 
-## Wire your agent
+Migrations run automatically at container startup (`deploy/entrypoint-mcp.sh` →
+`alembic upgrade head`) over the Cloud SQL socket.
 
-The cron'd agent calls `<service_url>/mcp` with the bearer token you set in
-`mcp_token`. Same MCP client config as the LAN setup, the AWS URL instead of the
-Pi's IP, over real HTTPS (managed cert — no `mkcert`):
+## Wire your agent
 
 ```yaml
 # ~/.hermes/config.yaml
 mcp_servers:
   auspex:
-    url: "https://xxxx.us-east-1.awsapprunner.com/mcp"
+    url: "https://auspex-mcp-xxxx.us-central1.run.app/mcp"
     headers:
       Authorization: "Bearer <the same mcp_token>"
 ```
 
-## Update the deployment
-
-Push a new image tag and bump `image_tag` (or re-push `latest` and trigger a
-deploy):
+## Update / tear down
 
 ```bash
-docker build -t "$REPO:v2" .. && docker push "$REPO:v2"
+docker build -t "$REPO/auspex-mcp:v2" .. && docker push "$REPO/auspex-mcp:v2"
 terraform apply -var=image_tag=v2
-```
 
-## Tear down
-
-```bash
-terraform destroy
+terraform destroy   # remove everything
 ```
 
 ## Notes & caveats
 
-- **Cost:** RDS free tier (12 mo) + ~$5–10/mo for one small App Runner instance
-  + LLM pay-per-token. Add an **AWS Budgets** alert.
-- **Single instance:** a job survives normally, but if App Runner recycles the
-  instance mid-run (deploy/crash) that job is lost — acceptable for a daily
-  report the agent can retry. The deferred worker split (0002) fixes this.
-- **Migrations** run at container startup via `deploy/entrypoint-mcp.sh`
-  (`alembic upgrade head`). Safe at single instance.
-- **Default VPC:** `network.tf` uses the account's default VPC/subnets to stay
-  small. Swap for a dedicated VPC module if you want isolation.
-- **Auth:** one static `AUSPEX_MCP_TOKEN`. Per-agent API keys are deferred
-  (0002) — fine while it's just your own agent.
+- **Cost:** Cloud Run compute is near-zero when idle; **Cloud SQL `db-f1-micro`
+  (~$8–10/mo)** is the floor. No NAT gateway. Add a **budget alert** in GCP
+  Billing. (Cheaper still: swap Cloud SQL for serverless Postgres like Neon over
+  the public internet — Cloud Run needs no connector for that.)
+- **`cpu_idle = false`** (CPU always allocated) is required so the in-process
+  background research job keeps running after `start_research` returns. With
+  `min_instances = 0` the instance still scales to zero when idle, so you pay
+  only for the minutes it's actually active.
+- **Single instance, in-process jobs:** if Cloud Run reclaims the instance
+  mid-run, that job is lost — acceptable for a daily report the agent retries;
+  the deferred worker split (0002) removes this.
+- **Public endpoint:** `allUsers` has `run.invoker` so the URL is reachable; the
+  app enforces its own `AUSPEX_MCP_TOKEN` bearer auth.

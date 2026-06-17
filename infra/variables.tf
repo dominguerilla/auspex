@@ -1,29 +1,34 @@
-variable "aws_region" {
-  description = "AWS region to deploy into."
+variable "project_id" {
+  description = "GCP project ID to deploy into."
   type        = string
-  default     = "us-east-1"
+}
+
+variable "region" {
+  description = "GCP region."
+  type        = string
+  default     = "us-central1"
 }
 
 variable "app_name" {
-  description = "Name prefix for all resources."
+  description = "Name prefix for resources (Cloud Run service, AR repo, etc.)."
   type        = string
   default     = "auspex-mcp"
 }
 
-variable "db_instance_class" {
-  description = "RDS instance class (db.t4g.micro is free-tier-eligible)."
+variable "db_tier" {
+  description = "Cloud SQL machine tier (db-f1-micro is the smallest/cheapest)."
   type        = string
-  default     = "db.t4g.micro"
+  default     = "db-f1-micro"
 }
 
 variable "db_username" {
-  description = "RDS master username."
+  description = "Cloud SQL database user."
   type        = string
   default     = "auspex"
 }
 
 variable "db_password" {
-  description = "RDS master password. Set via TF_VAR_db_password or tfvars — never commit it."
+  description = "Cloud SQL user password. Set via TF_VAR_db_password or tfvars — never commit."
   type        = string
   sensitive   = true
 }
@@ -47,25 +52,37 @@ variable "llm_api_key_env" {
 }
 
 variable "llm_api_key" {
-  description = "API key for the LLM provider. Set via TF_VAR_llm_api_key or tfvars — never commit it."
+  description = "API key for the LLM provider. Set via TF_VAR_llm_api_key or tfvars — never commit."
   type        = string
   sensitive   = true
 }
 
 variable "image_tag" {
-  description = "ECR image tag App Runner deploys."
+  description = "Artifact Registry image tag Cloud Run deploys."
   type        = string
   default     = "latest"
 }
 
-variable "service_cpu" {
-  description = "App Runner vCPU units (1024 = 1 vCPU)."
+variable "cpu" {
+  description = "Cloud Run vCPU per instance."
   type        = string
-  default     = "1024"
+  default     = "1"
 }
 
-variable "service_memory" {
-  description = "App Runner memory in MB."
+variable "memory" {
+  description = "Cloud Run memory per instance."
   type        = string
-  default     = "2048"
+  default     = "512Mi"
+}
+
+variable "min_instances" {
+  description = "Minimum Cloud Run instances (0 = scale to zero)."
+  type        = number
+  default     = 0
+}
+
+variable "max_instances" {
+  description = "Maximum Cloud Run instances."
+  type        = number
+  default     = 2
 }

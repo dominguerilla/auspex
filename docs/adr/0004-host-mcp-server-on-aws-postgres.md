@@ -7,6 +7,16 @@
 | **Owner** | Carlos |
 | **Related** | [0003](0003-sqlite-job-persistence.md) (scoped, not superseded), [proposals/0002](../proposals/0002-hosting-auspex.md), `auspex/mcp_server/server.py` |
 
+> **Revised (2026-06-17) — platform changed to GCP Cloud Run.** The Postgres /
+> stateless / cloud-LLM / polished-core decisions below all stand; only the
+> *platform* changed from **AWS App Runner + RDS** to **GCP Cloud Run + Cloud
+> SQL**. Reason: App Runner needs a private VPC to reach RDS, which forces a
+> ~$32/mo **NAT gateway** for the pipeline's outbound LLM/search calls. Cloud
+> Run reaches the internet directly and Cloud SQL via a socket — no VPC, no NAT.
+> The implementation lives in [`infra/`](../../infra/ARCHITECTURE.md);
+> "App Runner / RDS / ECR / Secrets Manager" below map to "Cloud Run / Cloud SQL
+> / Artifact Registry / Secret Manager."
+
 ## Context
 
 The MCP server (`auspex/mcp_server/`) is to be hosted online so remote agents can
