@@ -1,0 +1,22 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+# Secrets can also be passed via env vars: TF_VAR_db_password, TF_VAR_mcp_token,
+# TF_VAR_llm_api_key.
+
+project_id = "your-gcp-project-id"
+region     = "us-central1"
+app_name   = "auspex-mcp"
+
+# --- secrets (do NOT commit real values) ---
+db_password = "change-me-strong-db-password"
+mcp_token   = "change-me-long-random-bearer-token"
+
+# --- LLM provider (see llm/ollama_client.py for provider names + key env vars) ---
+# Anthropic (Claude) — defaults to Haiku 4.5; set llm_model for Sonnet.
+llm_provider    = "anthropic"
+llm_api_key_env = "ANTHROPIC_API_KEY"
+llm_api_key     = "sk-ant-..."
+# llm_model_env = "ANTHROPIC_MODEL"
+# llm_model     = "claude-sonnet-4-6"   # default when unset: claude-haiku-4-5
+
+# Image tag Cloud Run deploys (push this tag to Artifact Registry first).
+image_tag = "latest"

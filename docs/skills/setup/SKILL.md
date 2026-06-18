@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Set up the auspex development environment from scratch on a new machine.
-last_verified: 2026-06-10
+last_verified: 2026-06-12
 sources: [requirements.txt, .env.example, pyproject.toml]
 ---
 

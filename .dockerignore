@@ -1,0 +1,29 @@
+# Keep the build context (and the image) lean and secret-free.
+# Build context is the repo root; the Dockerfile's `COPY . .` ships whatever
+# isn't excluded here.
+
+# Local virtualenv — a Windows venv, useless in the Linux image (pip reinstalls).
+.venv/
+
+# Version control.
+.git/
+.gitignore
+.gitattributes
+
+# Terraform / infra — terraform.tfvars holds real secrets (DB password, MCP
+# token, LLM API key). Never ship it. The app doesn't need infra/ at runtime.
+infra/
+
+# Python caches and test artifacts.
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+
+# Tests and CI — not needed at runtime.
+tests/
+.github/
+
+# Local env files.
+.env
+*.env

@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-10
+last_verified: 2026-06-12
 sources: [requirements.txt, .env.example, Dockerfile, .github/workflows/deploy-hf-spaces.yml, evals/requirements.txt]
 owner: Carlos
 status: draft
@@ -87,6 +87,14 @@ uvicorn app:app --reload --port 7860
 ```
 
 Open http://localhost:7860. The frontend is served from `frontend/` as static files.
+
+### 6. Run the MCP server (optional)
+
+```sh
+python -m auspex.mcp_server
+```
+
+Exposes `start_research`, `get_research_status`, and `get_research_report` as MCP tools over stdio. See [docs/mcp.md](../mcp.md) for Claude Desktop configuration.
 
 ---
 

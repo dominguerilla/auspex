@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-10
+last_verified: 2026-06-16
 sources: [pyproject.toml, .github/workflows/test.yml, graph/state.py, agents/refiner.py, tests/conftest.py, prompts/]
 owner: Carlos
 status: draft
@@ -77,7 +77,9 @@ Source: `graph/state.py`
 - Use fixtures from `tests/conftest.py`:
   - `mock_llm` — a `MagicMock` that mimics `BaseChatModel`; `mock_llm.invoke.return_value.content` is `""` by default.
   - `base_state` — a zeroed `ResearchState` dict with empty lists and `None` optional fields.
-- LLM calls and network calls (DuckDuckGo, `requests`) are always mocked via `unittest.mock.patch`. No test should require a running Ollama server or internet access.
+- LLM calls and network calls (DuckDuckGo, `requests`) are always mocked via `unittest.mock.patch`. No test needs a running Ollama server or internet access.
+- **Exception — the MCP server tests** (`tests/test_mcp_server.py`) need a **Postgres** database (`DATABASE_URL`, default the local `docker-compose` Postgres; the pipeline itself is still mocked). They `skip` if Postgres is unreachable or unmigrated. Run `alembic upgrade head` first. CI provides a Postgres service. These tests do **not** run on native Windows (psycopg/libpq conflicts with the langgraph stack in-process) — use CI or WSL2/Linux.
+- Async tests (e.g. MCP server tests) use `pytest-asyncio` with `asyncio_mode = "auto"` (source: `pyproject.toml`) — no `@pytest.mark.asyncio` decorator needed.
 - Integration testing (real LLM, real network) is done manually with `main.py`.
 
 Source: `tests/conftest.py`, test files in `tests/`

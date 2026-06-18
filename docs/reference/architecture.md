@@ -1,6 +1,6 @@
 ---
-last_verified: 2026-06-10
-sources: [graph/graph_builder.py, graph/state.py, graph/edges.py, agents/, llm/ollama_client.py, llm/contract.py, tools/, app.py, prompts/]
+last_verified: 2026-06-17
+sources: [graph/graph_builder.py, graph/state.py, graph/edges.py, agents/, llm/ollama_client.py, llm/contract.py, tools/, app.py, auspex/mcp_server/server.py, auspex/mcp_server/__main__.py, alembic/, prompts/]
 owner: Carlos
 status: draft
 ---
@@ -11,12 +11,13 @@ status: draft
 
 Auspex is a **LangGraph `StateGraph`** pipeline. A single shared dict (`ResearchState`) flows through six agent nodes; each node reads from and writes back to that dict. The graph is compiled once at startup (`build_graph()` in `graph/graph_builder.py`) and reused for every research run.
 
-Two entrypoints drive the same graph:
+Three entrypoints drive the same graph:
 
 | Entrypoint | Invocation | Output |
 |---|---|---|
 | `main.py` | `graph.invoke(initial_state)` (synchronous) | Markdown file written to `output/` |
 | `app.py` | `graph.astream(initial_state)` (async) | SSE events → React frontend; completed job stored in `jobs.db` |
+| `auspex/mcp_server/` | `graph.astream(initial_state)` (async, background task) | MCP tool responses (stdio/HTTP); completed job + sources stored in **Postgres** |
 
 ---
 
@@ -101,16 +102,20 @@ class ResearchState(TypedDict):
 
 ## LLM factory (`llm/ollama_client.py`)
 
-`get_llm(temperature)` is the single LLM constructor. Every agent calls it; no agent imports `ChatOllama` or `ChatHuggingFace` directly. Provider selection is driven by `LLM_PROVIDER` env var at call time.
+`get_llm(temperature)` is the single LLM constructor. Every agent calls it; no agent imports `ChatOllama`, `ChatHuggingFace`, or `ChatOpenAI` directly. Provider selection is driven by `LLM_PROVIDER` env var at call time.
 
 | `LLM_PROVIDER` | Returns | Key env vars |
 |---|---|---|
 | `ollama` (default) | `ChatOllama` | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` |
 | `huggingface` | `ChatHuggingFace` wrapping `HuggingFaceEndpoint` | `HF_TOKEN`, `HF_MODEL` |
+| `nous` | `ChatOpenAI` against `portal.nousresearch.com/v1` | `NOUS_API_KEY`, `NOUS_MODEL` |
+| `openai_compatible` | `ChatOpenAI` against any OpenAI-compatible endpoint | `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL` |
 
-Both implement `BaseChatModel`; agents call `llm.invoke([HumanMessage(...)])` regardless of provider. Source: `llm/ollama_client.py:55-114`.
+All implement `BaseChatModel`; agents call `llm.invoke([HumanMessage(...)])` regardless of provider.
 
-`describe_llm()` (`llm/ollama_client.py:35-52`) returns the same provider/model the next `get_llm()` call would construct — consumed by the FastAPI `/config` endpoint so the frontend display can't drift from the actual runtime.
+**Provider registry (`PROVIDERS`).** Provider metadata — label, the env var that overrides the model, and the default model — lives in a single `PROVIDERS` dict (`llm/ollama_client.py`). Both `get_llm()` (construction) and `describe_llm()` (reporting) read it, and `evals/adapter.py` imports `describe_llm()`, so the model a run *reports* can't drift from the model it *uses*. The `openai_compatible` provider is the extension point: most new OpenAI-compatible backends (Together, Fireworks, OpenRouter, vLLM, …) are reachable via env vars alone, with no new code branch.
+
+`describe_llm()` returns the same provider/model the next `get_llm()` call would construct — consumed by the FastAPI `/config` endpoint and by the eval adapter's `agent_model` label.
 
 ---
 
@@ -175,6 +180,16 @@ Each `node_complete` event carries a `payload` built by `build_node_payload(node
 | writer | `word_count`, `citation_count` |
 
 **Shareable URLs:** completed jobs are stored in `jobs.db` (SQLite, `app.py:54-78`). The `/r/{job_id}` route returns the same `prototype.html`; the frontend reads the job snapshot from `GET /research/{job_id}`. The SQLite file is on the container's ephemeral disk — wiped on every HF Spaces redeploy.
+
+---
+
+## MCP Server (`auspex/mcp_server/`)
+
+A third entrypoint that exposes the pipeline as MCP tools (`start_research`, `get_research_status`, `get_research_report`) and a resource (`research://{job_id}`) for Claude Desktop and other MCP clients. Two transports: `python -m auspex.mcp_server` (stdio, default) and `--http` (streamable HTTP at `/mcp`, for remote LAN clients).
+
+Design — **worker split** (see [docs/adr/0005](../adr/0005-worker-split-cloud-tasks.md)): `start_research` writes a `queued` job row to **Postgres** and returns immediately; clients poll `get_research_status`. Execution is split from request handling: in the hosted deployment `start_research` enqueues a **Cloud Tasks** task that POSTs to the `/internal/run-job` route, which runs the graph *synchronously within the request* (so Cloud Run keeps the instance + CPU alive for the job) and updates Postgres `queued → running → done/error`; locally (stdio, no Cloud Tasks) it falls back to an in-process `asyncio` task. `get_research_status` / `get_research_report` read from Postgres, so they answer from any instance and survive scale-to-zero — there is no in-memory job store. All DB calls run via `asyncio.to_thread` so blocking libpq I/O never stalls the event loop; schema is owned by Alembic (psycopg2 — see [0004](../adr/0004-host-mcp-server-on-aws-postgres.md)). The HTTP transport disables FastMCP's localhost-only DNS-rebinding guard and gates **every** request — MCP tools and the worker route alike — behind an optional `AUSPEX_MCP_TOKEN` bearer token (`build_http_app()` + `BearerAuthMiddleware`; Cloud Tasks attaches the token). It imports `build_graph()` directly — not `app.py` — and uses its own Postgres store (not `app.py`'s SQLite `jobs.db`).
+
+See [docs/mcp.md](../mcp.md) for client configuration and tool reference.
 
 ---
 

@@ -1,0 +1,25 @@
+# Local Postgres for the MCP server's job store (see docs/adr/0004).
+# Usage:
+#   docker compose up -d
+#   export DATABASE_URL=postgresql://auspex:auspex@localhost:5432/auspex
+#   alembic upgrade head
+services:
+  postgres:
+    image: postgres:16
+    container_name: auspex-postgres
+    environment:
+      POSTGRES_USER: auspex
+      POSTGRES_PASSWORD: auspex
+      POSTGRES_DB: auspex
+    ports:
+      - "5432:5432"
+    volumes:
+      - auspex_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auspex"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  auspex_pgdata:
