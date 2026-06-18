@@ -86,6 +86,10 @@ resource "google_cloud_run_v2_service" "this" {
         name  = "WORKER_BASE_URL"
         value = local.worker_base_url
       }
+      env {
+        name  = "TASK_DISPATCH_DEADLINE_SECONDS"
+        value = trimsuffix(var.request_timeout, "s")
+      }
 
       env {
         name = "DATABASE_URL"

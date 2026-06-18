@@ -297,6 +297,41 @@ async def test_dispatch_in_process_runs_job(patched_server):
     assert status["status"] == "done"
 
 
+def test_enqueue_cloud_task_builds_request(monkeypatch):
+    pytest.importorskip("google.cloud.tasks_v2")
+    from google.cloud import tasks_v2
+
+    import auspex.mcp_server.server as srv
+
+    monkeypatch.setattr(srv, "_GCP_PROJECT", "proj")
+    monkeypatch.setattr(srv, "_TASKS_LOCATION", "us-central1")
+    monkeypatch.setattr(srv, "_TASKS_QUEUE", "auspex-jobs")
+    monkeypatch.setattr(srv, "_WORKER_BASE_URL", "https://svc.run.app")
+    monkeypatch.setattr(srv, "_MCP_TOKEN", "tok")
+    monkeypatch.setattr(srv, "_TASK_DISPATCH_DEADLINE_S", 1800)
+
+    captured = {}
+
+    class FakeClient:
+        def queue_path(self, project, location, queue):
+            return f"projects/{project}/locations/{location}/queues/{queue}"
+
+        def create_task(self, parent, task):
+            captured["parent"] = parent
+            captured["task"] = task
+
+    monkeypatch.setattr(tasks_v2, "CloudTasksClient", lambda: FakeClient())
+
+    srv._enqueue_cloud_task("job-xyz")
+
+    assert captured["parent"] == "projects/proj/locations/us-central1/queues/auspex-jobs"
+    req = captured["task"]["http_request"]
+    assert req["url"] == "https://svc.run.app/internal/run-job"
+    assert req["headers"]["Authorization"] == "Bearer tok"
+    assert b"job-xyz" in req["body"]
+    assert captured["task"]["dispatch_deadline"]["seconds"] == 1800
+
+
 # ---------------------------------------------------------------------------
 # Status transitions (read from Postgres)
 # ---------------------------------------------------------------------------

@@ -47,6 +47,12 @@ _TASKS_QUEUE = os.environ.get("CLOUD_TASKS_QUEUE")
 _WORKER_BASE_URL = os.environ.get("WORKER_BASE_URL")
 _MCP_TOKEN = os.environ.get("AUSPEX_MCP_TOKEN")
 
+# Cloud Tasks dispatch deadline (seconds) — kept in sync with the Cloud Run
+# request_timeout (Terraform sets this from var.request_timeout). Without it,
+# Cloud Tasks' 10-minute default would time out a still-running job and retry it,
+# causing a duplicate run.
+_TASK_DISPATCH_DEADLINE_S = int(os.environ.get("TASK_DISPATCH_DEADLINE_SECONDS", "1800"))
+
 mcp = FastMCP("Auspex Research Agent")
 
 # Build graph once at import time — safe because build_graph() only constructs
@@ -293,7 +299,8 @@ def _enqueue_cloud_task(job_id: str) -> None:
             "url": f"{_WORKER_BASE_URL}/internal/run-job",
             "headers": headers,
             "body": json.dumps({"job_id": job_id}).encode(),
-        }
+        },
+        "dispatch_deadline": {"seconds": _TASK_DISPATCH_DEADLINE_S},
     }
     client.create_task(parent=parent, task=task)
 
