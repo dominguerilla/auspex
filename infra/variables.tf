@@ -98,3 +98,15 @@ variable "llm_model" {
   type        = string
   default     = ""
 }
+
+variable "request_timeout" {
+  description = "Cloud Run request timeout — must cover a full research run delivered via the Cloud Tasks worker route (docs/adr/0005)."
+  type        = string
+  default     = "1800s"
+}
+
+variable "worker_base_url" {
+  description = "Public base URL Cloud Tasks targets for the worker route. Empty = compute from the Cloud Run default hostname; override if `terraform output service_url` differs."
+  type        = string
+  default     = ""
+}

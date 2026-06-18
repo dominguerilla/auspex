@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-16
+last_verified: 2026-06-17
 sources: [auspex/mcp_server/server.py, auspex/mcp_server/__main__.py, alembic/, docker-compose.yml, requirements.txt]
 owner: Carlos
 status: draft
@@ -76,9 +76,8 @@ Retrieve the final Markdown report for a completed job.
 If `status` is not `"done"`, `report` is `null` — keep polling
 `get_research_status` and retry once it transitions to `"done"`.
 
-> **Note:** `sources` is only populated for jobs started in the current
-> server session. It is not persisted to the database, so jobs retrieved
-> from a previous session will return `sources: []`.
+> **Note:** `sources` is persisted durably (the `sources` table), so it is
+> returned whether the job just completed or is read back in a later session.
 
 ## Resource
 
@@ -91,7 +90,10 @@ job is unknown or not yet done.
 
 ## Database
 
-The server stores jobs and sources in **Postgres** (see [docs/adr/0004](adr/0004-host-mcp-server-on-aws-postgres.md)).
+The server stores all job state — status, report, and sources — in **Postgres**
+from the moment a job is created, so jobs are durable and status/report reads
+work from any instance (see [docs/adr/0004](adr/0004-host-mcp-server-on-aws-postgres.md),
+[0005](adr/0005-worker-split-cloud-tasks.md)).
 Set `DATABASE_URL` (default: the local `docker-compose` database
 `postgresql://auspex:auspex@localhost:5432/auspex`) and apply migrations before
 serving:
@@ -196,8 +198,8 @@ the app.
 - `command` must be the **absolute path** to the Python interpreter inside
   your virtual environment (`.venv/bin/python` on Unix,
   `.venv\Scripts\python.exe` on Windows).
-- `cwd` must be the **absolute path** to the project root so that `jobs.db`
-  and the `graph/` package resolve correctly.
+- `cwd` must be the **absolute path** to the project root so the `graph/` and
+  `auspex/` packages resolve correctly.
 - The `env` block is merged with the server process's environment, so you
   can also rely on a `.env` file in the project root — but explicit values
   in `env` take precedence.
@@ -253,16 +255,17 @@ pip install "mcp[cli]>=1.2.0"
 - Confirm Ollama is running: `ollama serve`
 - Check `OLLAMA_BASE_URL` in the env block (default: `http://localhost:11434`).
 
-**Jobs persist across server restarts but sources don't**
+**Where job state lives**
 
-This is expected. The final Markdown report is stored in `jobs.db` and
-survives restarts. The scraped source details are held in-memory only.
+All job state — status, the final report, and scraped sources — is persisted to
+Postgres from job creation (see docs/adr/0004, 0005). Status and reports resolve
+from the database regardless of which instance handles the request, and
+`sources` is returned on every `get_research_report` call.
 
-Additionally, a completed job is evicted from the in-memory store once its
-report has been retrieved via `get_research_report` (to bound memory use).
-After eviction, `get_research_status` and `get_research_report` still resolve
-the status and report from `jobs.db`, but `sources` will be empty — they are
-only returned on the **first** `get_research_report` call for a job.
+**A job stays `queued` and never runs (hosted)**
+
+Usually the Cloud Tasks worker can't reach the service — verify `worker_base_url`
+matches `terraform output -raw service_url` (see [infra/README.md](../infra/README.md)).
 
 ## Hermes agent (Raspberry Pi / LAN)
 
@@ -296,7 +299,7 @@ Windows service (NSSM / Task Scheduler) for persistence.
 - **HTTPS**: TLS for the HTTP transport (e.g. via `mkcert` on the LAN) so the
   bearer token and traffic aren't sent in the clear.
 - **Job cancellation**: Allow clients to cancel an in-flight job.
-- **Progress notifications**: Emit MCP progress notifications from `_run_job`
-  so clients receive live node updates without polling.
+- **Progress notifications**: Emit MCP progress notifications from the job
+  runner so clients receive live node updates without polling.
 - **HF Spaces HTTP endpoint**: Mount at `/mcp` on the FastAPI app so the
   deployed Space serves MCP over the public URL.

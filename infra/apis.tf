@@ -5,6 +5,7 @@ resource "google_project_service" "apis" {
     "sqladmin.googleapis.com",
     "secretmanager.googleapis.com",
     "artifactregistry.googleapis.com",
+    "cloudtasks.googleapis.com",
     "iam.googleapis.com",
     "cloudresourcemanager.googleapis.com",
   ])

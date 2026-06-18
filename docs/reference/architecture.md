@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-16
+last_verified: 2026-06-17
 sources: [graph/graph_builder.py, graph/state.py, graph/edges.py, agents/, llm/ollama_client.py, llm/contract.py, tools/, app.py, auspex/mcp_server/server.py, auspex/mcp_server/__main__.py, alembic/, prompts/]
 owner: Carlos
 status: draft
@@ -187,7 +187,7 @@ Each `node_complete` event carries a `payload` built by `build_node_payload(node
 
 A third entrypoint that exposes the pipeline as MCP tools (`start_research`, `get_research_status`, `get_research_report`) and a resource (`research://{job_id}`) for Claude Desktop and other MCP clients. Two transports: `python -m auspex.mcp_server` (stdio, default) and `--http` (streamable HTTP at `/mcp`, for remote LAN clients).
 
-Design: `start_research` enqueues a job via `asyncio.create_task()` and returns immediately; clients poll `get_research_status`. The server holds a `_mcp_jobs` in-memory cache and persists jobs + sources to **Postgres** on completion (psycopg2, schema owned by Alembic — see [docs/adr/0004](../adr/0004-host-mcp-server-on-aws-postgres.md)). A completed job is evicted from `_mcp_jobs` once its report is retrieved; later reads fall back to Postgres (sources are durable there). All DB calls run via `asyncio.to_thread` so blocking libpq I/O never stalls the event loop. The HTTP transport disables FastMCP's localhost-only DNS-rebinding guard and gates requests behind an optional `AUSPEX_MCP_TOKEN` bearer token (`build_http_app()` + `BearerAuthMiddleware`). It imports `build_graph()` directly — it does not import `app.py`, and uses its own store (not `app.py`'s SQLite `jobs.db`).
+Design — **worker split** (see [docs/adr/0005](../adr/0005-worker-split-cloud-tasks.md)): `start_research` writes a `queued` job row to **Postgres** and returns immediately; clients poll `get_research_status`. Execution is split from request handling: in the hosted deployment `start_research` enqueues a **Cloud Tasks** task that POSTs to the `/internal/run-job` route, which runs the graph *synchronously within the request* (so Cloud Run keeps the instance + CPU alive for the job) and updates Postgres `queued → running → done/error`; locally (stdio, no Cloud Tasks) it falls back to an in-process `asyncio` task. `get_research_status` / `get_research_report` read from Postgres, so they answer from any instance and survive scale-to-zero — there is no in-memory job store. All DB calls run via `asyncio.to_thread` so blocking libpq I/O never stalls the event loop; schema is owned by Alembic (psycopg2 — see [0004](../adr/0004-host-mcp-server-on-aws-postgres.md)). The HTTP transport disables FastMCP's localhost-only DNS-rebinding guard and gates **every** request — MCP tools and the worker route alike — behind an optional `AUSPEX_MCP_TOKEN` bearer token (`build_http_app()` + `BearerAuthMiddleware`; Cloud Tasks attaches the token). It imports `build_graph()` directly — not `app.py` — and uses its own Postgres store (not `app.py`'s SQLite `jobs.db`).
 
 See [docs/mcp.md](../mcp.md) for client configuration and tool reference.
 

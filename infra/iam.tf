@@ -30,3 +30,10 @@ resource "google_project_iam_member" "cloudsql_client" {
   role    = "roles/cloudsql.client"
   member  = "serviceAccount:${google_service_account.runtime.email}"
 }
+
+# Allow the runtime SA to enqueue jobs on the Cloud Tasks queue (docs/adr/0005).
+resource "google_project_iam_member" "tasks_enqueuer" {
+  project = var.project_id
+  role    = "roles/cloudtasks.enqueuer"
+  member  = "serviceAccount:${google_service_account.runtime.email}"
+}

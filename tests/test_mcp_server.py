@@ -1,9 +1,9 @@
 """Unit tests for the Auspex MCP server.
 
 The pipeline (``_graph``) is mocked so no LLM calls or network access occur.
-The job store is Postgres (see docs/adr/0004): these tests require a reachable
-database (``DATABASE_URL``, default the local docker-compose Postgres) and are
-skipped if none is available. CI provides a Postgres service.
+Job state lives in Postgres from creation (the worker split, docs/adr/0005), so
+these tests require a reachable database (``DATABASE_URL``, default the local
+docker-compose Postgres) and are skipped if none is available. CI provides one.
 """
 
 import asyncio
@@ -25,11 +25,7 @@ def _connect():
 
 
 def _schema_ready() -> bool:
-    """True if Postgres is reachable AND the jobs/sources schema exists.
-
-    The schema is created by `alembic upgrade head` as a separate step (CI runs
-    it; locally it is run once) — tests do not migrate in-process.
-    """
+    """True if Postgres is reachable AND the jobs/sources schema exists."""
     try:
         conn = _connect()
     except Exception:
@@ -38,7 +34,13 @@ def _schema_ready() -> bool:
         with conn.cursor() as cur:
             cur.execute("SELECT to_regclass('public.jobs'), to_regclass('public.sources')")
             jobs, sources = cur.fetchone()
-        return jobs is not None and sources is not None
+            # current_node was added in migration 0002 — guard against a stale schema.
+            cur.execute(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'jobs' AND column_name = 'current_node'"
+            )
+            has_progress = cur.fetchone() is not None
+        return jobs is not None and sources is not None and has_progress
     except Exception:
         return False
     finally:
@@ -105,6 +107,21 @@ def make_failing_graph(exc: Exception):
     return mock
 
 
+async def _async_noop(*args, **kwargs):
+    """Stand-in for _dispatch_job so a job stays 'queued' for inspection."""
+    return None
+
+
+class _FakeRequest:
+    """Minimal stand-in for a Starlette Request with a JSON body."""
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    async def json(self):
+        return self._payload
+
+
 # ---------------------------------------------------------------------------
 # Postgres fixtures
 # ---------------------------------------------------------------------------
@@ -147,20 +164,50 @@ def _seed_job(job_id, *, question="q", status="done", report=None, error=None, s
         conn.close()
 
 
+def _db_job(job_id):
+    """Read a job row back as a dict, or None."""
+    conn = _connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT status, report, error, current_node, iteration, max_iterations, "
+                "agent_model FROM jobs WHERE id = %s",
+                (job_id,),
+            )
+            row = cur.fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return None
+    keys = ["status", "report", "error", "current_node", "iteration", "max_iterations",
+            "agent_model"]
+    return dict(zip(keys, row))
+
+
+async def _await_status(srv, job_id, target, timeout=3.0):
+    """Poll get_research_status until it reaches `target` (or times out)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        status = await srv.get_research_status(job_id)
+        if status["status"] == target:
+            return status
+        await asyncio.sleep(0.02)
+    return await srv.get_research_status(job_id)
+
+
 @pytest_asyncio.fixture
 async def patched_server(monkeypatch):
-    """MCP server module with _graph mocked and the test DB wired in.
-
-    Async so teardown can drain fire-and-forget _run_job tasks: tests that call
-    start_research without awaiting completion leave a pending task that would
-    otherwise wedge the event loop's teardown.
-    """
+    """MCP server module with _graph mocked, the test DB wired in, and Cloud
+    Tasks disabled (so start_research dispatches in-process)."""
     import auspex.mcp_server.server as srv
 
     monkeypatch.setattr(srv, "_DATABASE_URL", TEST_DATABASE_URL)
     monkeypatch.setattr(srv, "_graph", make_mock_graph(HAPPY_PATH_STEPS))
-    srv._mcp_jobs.clear()
+    for var in ("_GCP_PROJECT", "_TASKS_LOCATION", "_TASKS_QUEUE", "_WORKER_BASE_URL"):
+        monkeypatch.setattr(srv, var, None)
     yield srv
+    # Drain any in-process _run_job_from_db tasks left by start_research before
+    # the DB is truncated, so a late write can't hit an emptied table.
     leaked = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     for t in leaked:
         t.cancel()
@@ -169,7 +216,6 @@ async def patched_server(monkeypatch):
             await t
         except BaseException:
             pass
-    srv._mcp_jobs.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -178,18 +224,13 @@ async def patched_server(monkeypatch):
 
 
 async def test_tool_discovery(patched_server):
-    """All three tools must be registered with the FastMCP instance."""
-    import auspex.mcp_server.server as srv
-
-    tools = await srv.mcp.list_tools()
+    tools = await patched_server.mcp.list_tools()
     tool_names = {t.name for t in tools}
-    assert "start_research" in tool_names
-    assert "get_research_status" in tool_names
-    assert "get_research_report" in tool_names
+    assert {"start_research", "get_research_status", "get_research_report"} <= tool_names
 
 
 # ---------------------------------------------------------------------------
-# start_research
+# start_research — creates a durable queued row
 # ---------------------------------------------------------------------------
 
 
@@ -201,11 +242,9 @@ async def test_start_research_returns_job_id(patched_server):
 
 
 async def test_start_research_non_blocking(patched_server):
-    """start_research must return in <1s regardless of pipeline duration."""
     t0 = time.perf_counter()
     result = await patched_server.start_research("test question")
-    elapsed = time.perf_counter() - t0
-    assert elapsed < 1.0
+    assert time.perf_counter() - t0 < 1.0
     assert result["status"] == "queued"
 
 
@@ -214,69 +253,148 @@ async def test_start_research_empty_query_raises(patched_server):
         await patched_server.start_research("   ")
 
 
-async def test_start_research_max_iterations_capped(patched_server):
-    result = await patched_server.start_research("test", max_iterations=99)
-    job_id = result["job_id"]
-    assert patched_server._mcp_jobs[job_id]["max_iterations"] == 5
+async def test_start_research_writes_queued_row(patched_server, monkeypatch):
+    monkeypatch.setattr(patched_server, "_dispatch_job", _async_noop)
+    result = await patched_server.start_research("Persisted question", max_iterations=3)
+    job = _db_job(result["job_id"])
+    assert job["status"] == "queued"
+    assert job["max_iterations"] == 3
+    assert job["agent_model"]  # provider/model captured at creation
 
 
-async def test_start_research_max_iterations_minimum(patched_server):
-    result = await patched_server.start_research("test", max_iterations=0)
-    job_id = result["job_id"]
-    assert patched_server._mcp_jobs[job_id]["max_iterations"] == 1
-
-
-async def test_start_research_max_iterations_default(patched_server):
-    result = await patched_server.start_research("test")
-    job_id = result["job_id"]
-    assert patched_server._mcp_jobs[job_id]["max_iterations"] == 2
+@pytest.mark.parametrize("requested,expected", [(99, 5), (0, 1), (None, 2)])
+async def test_max_iterations_clamped(patched_server, monkeypatch, requested, expected):
+    monkeypatch.setattr(patched_server, "_dispatch_job", _async_noop)
+    kwargs = {} if requested is None else {"max_iterations": requested}
+    result = await patched_server.start_research("test", **kwargs)
+    assert _db_job(result["job_id"])["max_iterations"] == expected
 
 
 # ---------------------------------------------------------------------------
-# Status transitions
+# Dispatch: Cloud Tasks vs in-process
+# ---------------------------------------------------------------------------
+
+
+async def test_dispatch_enqueues_cloud_task_when_configured(patched_server, monkeypatch):
+    monkeypatch.setattr(patched_server, "_GCP_PROJECT", "proj")
+    monkeypatch.setattr(patched_server, "_TASKS_LOCATION", "us-central1")
+    monkeypatch.setattr(patched_server, "_TASKS_QUEUE", "auspex-jobs")
+    monkeypatch.setattr(patched_server, "_WORKER_BASE_URL", "https://svc.run.app")
+    enqueue = MagicMock()
+    monkeypatch.setattr(patched_server, "_enqueue_cloud_task", enqueue)
+
+    result = await patched_server.start_research("cloud task path")
+    job_id = result["job_id"]
+    await asyncio.sleep(0.05)  # let the to_thread enqueue run
+
+    enqueue.assert_called_once_with(job_id)
+    assert _db_job(job_id)["status"] == "queued"  # worker has not run it
+
+
+async def test_dispatch_in_process_runs_job(patched_server):
+    result = await patched_server.start_research("in-process path")
+    status = await _await_status(patched_server, result["job_id"], "done")
+    assert status["status"] == "done"
+
+
+# ---------------------------------------------------------------------------
+# Status transitions (read from Postgres)
 # ---------------------------------------------------------------------------
 
 
 async def test_status_queued_immediately(patched_server):
     result = await patched_server.start_research("test")
-    job_id = result["job_id"]
-    status = await patched_server.get_research_status(job_id)
-    assert status["status"] in ("queued", "running")
+    status = await patched_server.get_research_status(result["job_id"])
+    assert status["status"] in ("queued", "running", "done")
 
 
 async def test_status_transitions_to_done(patched_server):
     result = await patched_server.start_research("What is quantum computing?")
-    job_id = result["job_id"]
-    await asyncio.sleep(0.1)
-
-    status = await patched_server.get_research_status(job_id)
+    status = await _await_status(patched_server, result["job_id"], "done")
     assert status["status"] == "done"
     assert status["current_node"] == "writer"
     assert status["iteration"] == 1
     assert status["error"] is None
 
 
-async def test_status_error_on_pipeline_failure(monkeypatch):
-    import auspex.mcp_server.server as srv
-
-    monkeypatch.setattr(srv, "_DATABASE_URL", TEST_DATABASE_URL)
-    monkeypatch.setattr(srv, "_graph", make_failing_graph(RuntimeError("LLM unreachable")))
-    srv._mcp_jobs.clear()
-
-    result = await srv.start_research("test")
-    job_id = result["job_id"]
-    await asyncio.sleep(0.1)
-
-    status = await srv.get_research_status(job_id)
+async def test_pipeline_failure_sets_error(patched_server, monkeypatch):
+    monkeypatch.setattr(
+        patched_server, "_graph", make_failing_graph(RuntimeError("LLM unreachable"))
+    )
+    job_id = "fail-1"
+    patched_server._create_job(job_id, "boom", 2, "test/model")
+    await patched_server._run_job_from_db(job_id)
+    status = await patched_server.get_research_status(job_id)
     assert status["status"] == "error"
     assert "LLM unreachable" in status["error"]
-
-    srv._mcp_jobs.clear()
 
 
 async def test_unknown_job_id_raises(patched_server):
     with pytest.raises(ValueError, match="Unknown job_id"):
         await patched_server.get_research_status("nonexistent-job-id")
+
+
+async def test_status_reads_seeded_job(patched_server):
+    _seed_job("db-job-001", status="done", report="old report content")
+    status = await patched_server.get_research_status("db-job-001")
+    assert status["status"] == "done"
+    assert status["current_node"] is None
+
+
+async def test_status_error_reads_seeded_job(patched_server):
+    _seed_job("db-job-002", status="error", error="LLM timeout")
+    status = await patched_server.get_research_status("db-job-002")
+    assert status["status"] == "error"
+    assert status["error"] == "LLM timeout"
+
+
+# ---------------------------------------------------------------------------
+# The worker: _run_job_from_db + /internal/run-job route
+# ---------------------------------------------------------------------------
+
+
+async def test_run_job_from_db_drives_queued_to_done(patched_server):
+    job_id = "wk-1"
+    patched_server._create_job(job_id, "worker question", 2, "test/model")
+    await patched_server._run_job_from_db(job_id)
+    job = _db_job(job_id)
+    assert job["status"] == "done"
+    assert "Research Report" in job["report"]
+    assert job["current_node"] == "writer"
+
+
+async def test_run_job_from_db_persists_sources(patched_server):
+    job_id = "wk-2"
+    patched_server._create_job(job_id, "worker sources", 2, "test/model")
+    await patched_server._run_job_from_db(job_id)
+    report = await patched_server.get_research_report(job_id)
+    assert len(report["sources"]) == 1
+    assert report["sources"][0]["url"] == "http://example.com/a"
+
+
+async def test_run_job_from_db_unknown_id_is_noop(patched_server):
+    await patched_server._run_job_from_db("does-not-exist")  # must not raise
+
+
+async def test_run_job_endpoint_processes_job(patched_server):
+    job_id = "wk-3"
+    patched_server._create_job(job_id, "endpoint question", 2, "test/model")
+    resp = await patched_server.run_job_endpoint(_FakeRequest({"job_id": job_id}))
+    assert resp.status_code == 200
+    assert _db_job(job_id)["status"] == "done"
+
+
+async def test_run_job_endpoint_requires_job_id(patched_server):
+    resp = await patched_server.run_job_endpoint(_FakeRequest({}))
+    assert resp.status_code == 400
+
+
+def test_build_http_app_adds_worker_route():
+    import auspex.mcp_server.server as srv
+
+    app = srv.build_http_app(token=None)
+    paths = {getattr(r, "path", None) for r in app.routes}
+    assert "/internal/run-job" in paths
 
 
 # ---------------------------------------------------------------------------
@@ -286,21 +404,18 @@ async def test_unknown_job_id_raises(patched_server):
 
 async def test_report_available_after_done(patched_server):
     result = await patched_server.start_research("What is quantum computing?")
-    job_id = result["job_id"]
-    await asyncio.sleep(0.1)
-
-    report = await patched_server.get_research_report(job_id)
+    await _await_status(patched_server, result["job_id"], "done")
+    report = await patched_server.get_research_report(result["job_id"])
     assert report["status"] == "done"
     assert report["report"] == "# Research Report\n\nContent here."
-    assert len(report["sources"]) == 1
     assert report["sources"][0]["url"] == "http://example.com/a"
 
 
 async def test_report_none_while_running(patched_server):
-    result = await patched_server.start_research("test")
-    job_id = result["job_id"]
-    report = await patched_server.get_research_report(job_id)
+    _seed_job("rep-run", status="running")
+    report = await patched_server.get_research_report("rep-run")
     assert report["report"] is None
+    assert report["status"] == "running"
 
 
 async def test_report_unknown_job_raises(patched_server):
@@ -308,64 +423,7 @@ async def test_report_unknown_job_raises(patched_server):
         await patched_server.get_research_report("nonexistent-id")
 
 
-# ---------------------------------------------------------------------------
-# Persistence + Postgres fallback
-# ---------------------------------------------------------------------------
-
-
-async def test_job_persisted_to_postgres_on_completion(patched_server):
-    result = await patched_server.start_research("Persisted question")
-    job_id = result["job_id"]
-    await asyncio.sleep(0.1)
-
-    conn = _connect()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT status, report, agent_model FROM jobs WHERE id = %s", (job_id,))
-            row = cur.fetchone()
-    finally:
-        conn.close()
-    assert row is not None
-    assert row[0] == "done"
-    assert "Research Report" in row[1]
-    assert row[2]  # agent_model captured (provider/model)
-
-
-async def test_sources_persisted_to_postgres_on_completion(patched_server):
-    result = await patched_server.start_research("with sources")
-    job_id = result["job_id"]
-    await asyncio.sleep(0.1)
-
-    conn = _connect()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT url, summary, raw_length FROM sources WHERE job_id = %s", (job_id,)
-            )
-            rows = cur.fetchall()
-    finally:
-        conn.close()
-    assert len(rows) == 1
-    assert rows[0][0] == "http://example.com/a"
-    assert rows[0][2] == 800
-
-
-async def test_status_falls_back_to_postgres(patched_server):
-    _seed_job("db-job-001", status="done", report="old report content")
-    status = await patched_server.get_research_status("db-job-001")
-    assert status["status"] == "done"
-    assert status["current_node"] is None
-    assert status["iteration"] is None
-
-
-async def test_status_error_falls_back_to_postgres(patched_server):
-    _seed_job("db-job-002", status="error", error="LLM timeout")
-    status = await patched_server.get_research_status("db-job-002")
-    assert status["status"] == "error"
-    assert status["error"] == "LLM timeout"
-
-
-async def test_report_falls_back_to_postgres_with_durable_sources(patched_server):
+async def test_report_reads_seeded_job_with_durable_sources(patched_server):
     _seed_job(
         "db-job-003",
         status="done",
@@ -375,46 +433,7 @@ async def test_report_falls_back_to_postgres_with_durable_sources(patched_server
     report = await patched_server.get_research_report("db-job-003")
     assert report["status"] == "done"
     assert report["report"] == "# LangGraph\n\nPersisted report."
-    assert len(report["sources"]) == 1  # sources now durable, not lost
     assert report["sources"][0]["url"] == "http://a.com"
-
-
-# ---------------------------------------------------------------------------
-# In-memory job eviction (memory-leak fix)
-# ---------------------------------------------------------------------------
-
-
-async def test_report_evicts_completed_job(patched_server):
-    result = await patched_server.start_research("evict me")
-    job_id = result["job_id"]
-    await asyncio.sleep(0.1)
-    assert job_id in patched_server._mcp_jobs
-
-    report = await patched_server.get_research_report(job_id)
-    assert report["status"] == "done"
-    assert report["sources"]
-    assert job_id not in patched_server._mcp_jobs
-
-
-async def test_status_after_eviction_falls_back_to_postgres(patched_server):
-    result = await patched_server.start_research("evict then status")
-    job_id = result["job_id"]
-    await asyncio.sleep(0.1)
-    await patched_server.get_research_report(job_id)  # triggers eviction
-    assert job_id not in patched_server._mcp_jobs
-
-    status = await patched_server.get_research_status(job_id)
-    assert status["status"] == "done"
-
-
-async def test_running_job_not_evicted(patched_server):
-    result = await patched_server.start_research("still running")
-    job_id = result["job_id"]
-    patched_server._mcp_jobs[job_id]["status"] = "running"
-
-    report = await patched_server.get_research_report(job_id)
-    assert report["report"] is None
-    assert job_id in patched_server._mcp_jobs
 
 
 # ---------------------------------------------------------------------------
@@ -424,10 +443,8 @@ async def test_running_job_not_evicted(patched_server):
 
 async def test_resource_returns_report(patched_server):
     result = await patched_server.start_research("resource test")
-    job_id = result["job_id"]
-    await asyncio.sleep(0.1)
-
-    content = await patched_server.research_report_resource(job_id)
+    await _await_status(patched_server, result["job_id"], "done")
+    content = await patched_server.research_report_resource(result["job_id"])
     assert "Research Report" in content
 
 
@@ -437,12 +454,9 @@ async def test_resource_raises_for_unknown_job(patched_server):
 
 
 async def test_resource_raises_when_not_done(patched_server):
-    result = await patched_server.start_research("pending resource")
-    job_id = result["job_id"]
-    patched_server._mcp_jobs[job_id]["status"] = "running"
-
+    _seed_job("res-run", status="running")
     with pytest.raises(ValueError):
-        await patched_server.research_report_resource(job_id)
+        await patched_server.research_report_resource("res-run")
 
 
 # ---------------------------------------------------------------------------
@@ -451,7 +465,6 @@ async def test_resource_raises_when_not_done(patched_server):
 
 
 def test_build_http_app_disables_transport_security():
-    """Regression: --http must clear the localhost-only DNS-rebinding guard."""
     import auspex.mcp_server.server as srv
 
     srv.mcp.settings.transport_security = object()
@@ -475,8 +488,7 @@ def test_bearer_auth_allows_correct_token():
 
     from auspex.mcp_server.server import BearerAuthMiddleware
 
-    app = BearerAuthMiddleware(_dummy_asgi_app(), token="s3cret")
-    client = TestClient(app)
+    client = TestClient(BearerAuthMiddleware(_dummy_asgi_app(), token="s3cret"))
     resp = client.get("/mcp", headers={"Authorization": "Bearer s3cret"})
     assert resp.status_code == 200
     assert resp.text == "ok"
@@ -487,10 +499,8 @@ def test_bearer_auth_rejects_wrong_token():
 
     from auspex.mcp_server.server import BearerAuthMiddleware
 
-    app = BearerAuthMiddleware(_dummy_asgi_app(), token="s3cret")
-    client = TestClient(app)
-    resp = client.get("/mcp", headers={"Authorization": "Bearer nope"})
-    assert resp.status_code == 401
+    client = TestClient(BearerAuthMiddleware(_dummy_asgi_app(), token="s3cret"))
+    assert client.get("/mcp", headers={"Authorization": "Bearer nope"}).status_code == 401
 
 
 def test_bearer_auth_rejects_missing_header():
@@ -498,7 +508,5 @@ def test_bearer_auth_rejects_missing_header():
 
     from auspex.mcp_server.server import BearerAuthMiddleware
 
-    app = BearerAuthMiddleware(_dummy_asgi_app(), token="s3cret")
-    client = TestClient(app)
-    resp = client.get("/mcp")
-    assert resp.status_code == 401
+    client = TestClient(BearerAuthMiddleware(_dummy_asgi_app(), token="s3cret"))
+    assert client.get("/mcp").status_code == 401

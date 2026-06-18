@@ -28,6 +28,9 @@ python-dotenv==1.2.2
 # MCP server
 mcp[cli]>=1.2.0
 
+# Durable job dispatch for the hosted worker split (see docs/adr/0005)
+google-cloud-tasks>=2.16
+
 # Postgres-backed MCP job store (see docs/adr/0004)
 # psycopg2 (not psycopg3): psycopg3's bundled libpq crashes in-process with the
 # langchain/langgraph native stack on Windows; psycopg2-binary is immune.

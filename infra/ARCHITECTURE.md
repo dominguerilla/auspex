@@ -14,9 +14,10 @@ flowchart TB
     subgraph gcp["Google Cloud · project · us-central1"]
       ar[("Artifact Registry<br/>image")]
       secrets[("Secret Manager<br/>DATABASE_URL · token · LLM key")]
+      tasks{{"Cloud Tasks<br/>queue"}}
 
       subgraph run["Cloud Run service (public HTTPS)"]
-        svc["MCP container :8080  /mcp<br/>runs as SA: auspex-mcp-run"]
+        svc["MCP container :8080<br/>/mcp · /internal/run-job<br/>SA: auspex-mcp-run"]
       end
 
       sql[("Cloud SQL<br/>PostgreSQL 16")]
@@ -27,7 +28,16 @@ flowchart TB
     svc -. "read · secretAccessor" .-> secrets
     svc ==>|"unix socket /cloudsql/…<br/>roles/cloudsql.client"| sql
     svc -->|"direct egress · no NAT"| internet
+    svc -->|"enqueue job · cloudtasks.enqueuer"| tasks
+    tasks -->|"POST /internal/run-job<br/>(Bearer)"| svc
 ```
+
+> **Job execution (worker split, [ADR 0005](../docs/adr/0005-worker-split-cloud-tasks.md)):**
+> `start_research` writes a `queued` row to Cloud SQL and enqueues a **Cloud Tasks**
+> task; Cloud Tasks POSTs it back to the service's `/internal/run-job` route, which
+> runs the research *inside that request* (keeping the instance alive) and updates
+> Cloud SQL. Status/report reads come from Cloud SQL — so jobs survive instance
+> churn and the service scales to zero (`min=0`, `cpu_idle=true`).
 
 ## Request flow
 

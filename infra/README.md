@@ -19,12 +19,13 @@ internet directly and Cloud SQL via a socket, so there's no VPC/NAT at all.
 
 | Resource | Purpose |
 |---|---|
-| `google_cloud_run_v2_service.this` | The MCP server (HTTPS, port 8080), CPU always allocated |
+| `google_cloud_run_v2_service.this` | The MCP server (HTTPS, port 8080), scale-to-zero |
 | `google_sql_database_instance.postgres` | Cloud SQL Postgres 16 (`db-f1-micro`) |
+| `google_cloud_tasks_queue.jobs` | Durable job queue → worker route (docs/adr/0005) |
 | `google_artifact_registry_repository.this` | Holds the container image |
 | `google_secret_manager_secret.*` | `DATABASE_URL`, `AUSPEX_MCP_TOKEN`, LLM key |
-| `google_service_account.runtime` + IAM | Read secrets, connect to Cloud SQL |
-| `google_project_service.apis` | Enables run / sqladmin / secretmanager / AR |
+| `google_service_account.runtime` + IAM | Read secrets, connect to Cloud SQL, enqueue tasks |
+| `google_project_service.apis` | Enables run / sqladmin / secretmanager / AR / cloudtasks |
 
 ## Prerequisites
 
@@ -114,12 +115,16 @@ terraform destroy   # remove everything
   (~$8–10/mo)** is the floor. No NAT gateway. Add a **budget alert** in GCP
   Billing. (Cheaper still: swap Cloud SQL for serverless Postgres like Neon over
   the public internet — Cloud Run needs no connector for that.)
-- **`cpu_idle = false`** (CPU always allocated) is required so the in-process
-  background research job keeps running after `start_research` returns. With
-  `min_instances = 0` the instance still scales to zero when idle, so you pay
-  only for the minutes it's actually active.
-- **Single instance, in-process jobs:** if Cloud Run reclaims the instance
-  mid-run, that job is lost — acceptable for a daily report the agent retries;
-  the deferred worker split (0002) removes this.
+- **Durable jobs (worker split, docs/adr/0005):** `start_research` persists the
+  job to Cloud SQL and enqueues a **Cloud Tasks** task that runs it via
+  `/internal/run-job`. Jobs survive instance churn and the service runs
+  `min_instances = 0` + `cpu_idle = true` (scale-to-zero) — you pay only for the
+  minutes a job is actually running.
+- **`worker_base_url`:** Cloud Tasks must POST to the service's public URL. The
+  Terraform computes it from the Cloud Run default hostname; after the first
+  apply, **verify it matches `terraform output -raw service_url`** and, if not,
+  set `worker_base_url` in `terraform.tfvars` and re-apply (otherwise jobs stay
+  `queued` because the task 404s).
 - **Public endpoint:** `allUsers` has `run.invoker` so the URL is reachable; the
-  app enforces its own `AUSPEX_MCP_TOKEN` bearer auth.
+  app enforces its own `AUSPEX_MCP_TOKEN` bearer auth on both `/mcp` and the
+  worker route (Cloud Tasks attaches the token).

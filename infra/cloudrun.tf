@@ -1,11 +1,15 @@
 resource "google_cloud_run_v2_service" "this" {
-  name     = var.app_name
-  location = var.region
-  ingress  = "INGRESS_TRAFFIC_ALL"
+  name                = var.app_name
+  location            = var.region
+  ingress             = "INGRESS_TRAFFIC_ALL"
   deletion_protection = false
 
   template {
     service_account = google_service_account.runtime.email
+
+    # Long enough for a full research run delivered via the Cloud Tasks worker
+    # route (docs/adr/0005). It's a maximum, so quick MCP tool calls are unaffected.
+    timeout = var.request_timeout
 
     scaling {
       min_instance_count = var.min_instances
@@ -36,9 +40,11 @@ resource "google_cloud_run_v2_service" "this" {
           cpu    = var.cpu
           memory = var.memory
         }
-        # CPU always allocated — required so the in-process background research
-        # job keeps running after start_research returns its HTTP response.
-        cpu_idle = false
+        # CPU only during requests (cheap, scale-to-zero friendly). The research
+        # runs inside the Cloud Tasks worker request, which keeps the instance +
+        # CPU alive for the job's duration, so always-allocated CPU is no longer
+        # needed (docs/adr/0005).
+        cpu_idle = true
       }
 
       volume_mounts {
@@ -59,6 +65,26 @@ resource "google_cloud_run_v2_service" "this" {
           name  = var.llm_model_env
           value = var.llm_model
         }
+      }
+
+      # Cloud Tasks dispatch (docs/adr/0005). start_research enqueues a task that
+      # POSTs to WORKER_BASE_URL/internal/run-job; when these are absent the
+      # server runs jobs in-process (local/stdio dev).
+      env {
+        name  = "GCP_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "CLOUD_TASKS_LOCATION"
+        value = var.region
+      }
+      env {
+        name  = "CLOUD_TASKS_QUEUE"
+        value = google_cloud_tasks_queue.jobs.name
+      }
+      env {
+        name  = "WORKER_BASE_URL"
+        value = local.worker_base_url
       }
 
       env {
