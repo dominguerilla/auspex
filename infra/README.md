@@ -39,6 +39,23 @@ internet directly and Cloud SQL via a socket, so there's no VPC/NAT at all.
 - A working Docker to build/push the image (the Linux runtime conflict that
   blocks native Windows does not affect builds or the Linux runtime).
 
+## Remote state (GCS backend)
+
+State lives in a GCS bucket (`versions.tf` → `backend "gcs"`) so it's shared,
+locked, and versioned across machines. The bucket must exist **before**
+`terraform init` — create it once (it is not managed by this Terraform):
+
+```bash
+gcloud storage buckets create gs://auspex-499718-tfstate \
+  --location=us-central1 --uniform-bucket-level-access
+gcloud storage buckets update gs://auspex-499718-tfstate --versioning
+```
+
+Migrating an existing local state into it: `terraform init -migrate-state`.
+On a fresh machine, a plain `terraform init` pulls state from the bucket — no
+`terraform.tfstate` to copy. (Don't delete the bucket; `terraform destroy` of
+the stack won't touch it.)
+
 ## Deploy
 
 Cloud Run pulls the image at deploy time, so Artifact Registry must exist and
