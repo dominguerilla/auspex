@@ -103,6 +103,14 @@ resource "google_cloud_run_v2_service" "this" {
     google_secret_manager_secret_iam_member.llm_api_key,
     google_project_iam_member.cloudsql_client,
   ]
+
+  # The API always returns a service-level `scaling` block populated with
+  # defaults (manual_instance_count / min_instance_count = 0). We manage scaling
+  # via template.scaling instead, so this top-level block produces a perpetual
+  # no-op diff. Ignore it. (Does not affect template.scaling min/max.)
+  lifecycle {
+    ignore_changes = [scaling]
+  }
 }
 
 # Make the service publicly reachable. The app does its own bearer-token auth

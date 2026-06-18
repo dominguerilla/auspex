@@ -6,6 +6,11 @@ resource "google_sql_database_instance" "postgres" {
   settings {
     tier = var.db_tier
 
+    # db-f1-micro is a shared-core tier, valid only in the Enterprise edition.
+    # Cloud SQL otherwise defaults to Enterprise Plus, which rejects it (and only
+    # offers the much pricier db-perf-optimized-N-* dedicated tiers).
+    edition = "ENTERPRISE"
+
     # Public IP is how the Cloud Run → Cloud SQL connector reaches the instance.
     # Access is still authenticated (IAM + the connector); the DB is not open to
     # arbitrary clients.
