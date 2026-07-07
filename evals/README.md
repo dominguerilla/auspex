@@ -38,6 +38,7 @@ report.
 | File | Purpose |
 | --- | --- |
 | `cases/cases.jsonl` | 12 hand-authored cases: factoids, explanatory, comparative, freshness, adversarial. Each carries `expected.rubric` (judge sees it) plus structured `must_mention` / `min_sources` (programmatic scorers read them). |
+| `cases/humanities.jsonl` | 5 interpretive cases in the humanities (esoterica, cognitive science, philosophy of mind, semiotics). Same schema as `cases.jsonl`, but the answers are contested rather than factual, so the rubrics lean heavily on the judge and keep `must_mention` minimal. Run with `--dataset evals/cases/humanities.jsonl`. |
 | `cases/single_factoid.jsonl` | Single factoid case for quick iteration. |
 | `cases/__init__.py` | Package marker for the cases module. |
 | `adapter.py` | Wraps `graph.invoke(state)` into the `Callable[[dict], dict]` shape `assay` expects. Returns the report text plus `sources`, `critique`, and iteration count for downstream scorers. |
@@ -53,6 +54,8 @@ report.
 | Comparative | 3 | Tradeoff analysis across two artifacts. |
 | Freshness | 2 | Live-search dependency; will rot if the question stops being current. |
 | Adversarial | 2 | Refusal to fabricate (nonexistent paper; unknowable forecast). |
+
+The breakdown above covers `cases.jsonl`. `humanities.jsonl` adds 5 **interpretive** cases (archangel correspondences, memory-palace neuroscience, Dennett's Multiple Drafts, Hermetic vs Christian gnosis, criteria for symbolic systems) where the answer is contested rather than factual. These exercise the judge's handling of balance, tradition-relative claims, and "name your frame" reasoning more than programmatic keyword checks.
 
 ## Caveats
 

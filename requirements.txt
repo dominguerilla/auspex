@@ -4,6 +4,8 @@ langchain-community==0.4.1
 langchain-core==1.2.20
 langchain-ollama==1.0.1
 langchain-huggingface==1.2.1
+langchain-openai>=0.3.0
+langchain-anthropic>=0.3.0
 huggingface-hub==0.36.0
 langgraph==1.1.3
 
@@ -23,6 +25,19 @@ requests==2.32.5
 # Config
 python-dotenv==1.2.2
 
+# MCP server
+mcp[cli]>=1.2.0
+
+# Durable job dispatch for the hosted worker split (see docs/adr/0005)
+google-cloud-tasks>=2.16
+
+# Postgres-backed MCP job store (see docs/adr/0004)
+# psycopg2 (not psycopg3): psycopg3's bundled libpq crashes in-process with the
+# langchain/langgraph native stack on Windows; psycopg2-binary is immune.
+psycopg2-binary>=2.9
+alembic>=1.13
+
 # Testing / linting
 pytest==9.0.2
+pytest-asyncio>=0.23
 ruff>=0.4.0

@@ -32,9 +32,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
+from console_utf8 import configure_utf8_console
 from graph.graph_builder import build_graph
 from llm.contract import CITATION_LINK_RE
 from llm.ollama_client import describe_llm
+
+configure_utf8_console()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

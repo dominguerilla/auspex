@@ -139,6 +139,49 @@ Notes:
 - The container's filesystem is ephemeral on the free tier — `jobs.db` is wiped on every redeploy. The UI surfaces this in the "About this report" rail.
 - The Space sleeps after ~48h of no traffic; the first request after sleep takes ~30s to warm up.
 
+## MCP Server (Claude Desktop / Cursor)
+
+Auspex ships an MCP server so Claude Desktop, Cursor, and other MCP clients can run
+research jobs directly as tool calls.
+
+> **Demo** *(GIF placeholder — Claude Desktop calling `start_research`, polling
+> `get_research_status`, then summarising the report)*
+
+### Quick setup
+
+1. Install dependencies (see [Setup](#setup) above).
+2. Add to your Claude Desktop config
+   (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS,
+   `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "auspex": {
+      "command": "/absolute/path/to/.venv/bin/python",
+      "args": ["-m", "auspex.mcp_server"],
+      "cwd": "/absolute/path/to/research-agent",
+      "env": {
+        "DATABASE_URL": "postgresql://auspex:auspex@localhost:5432/auspex",
+        "LLM_PROVIDER": "ollama",
+        "OLLAMA_BASE_URL": "http://localhost:11434",
+        "OLLAMA_MODEL": "qwen2.5:3b"
+      }
+    }
+  }
+}
+```
+
+> The MCP server stores jobs in Postgres — run `docker compose up -d` and
+> `alembic upgrade head` first. See [docs/mcp.md](docs/mcp.md). (On native Windows
+> use WSL2; the Postgres-backed server can't run there — see the doc.)
+
+3. Restart Claude Desktop. Three tools appear: **start_research**,
+   **get_research_status**, **get_research_report**.
+
+See [docs/mcp.md](docs/mcp.md) for the full reference (HuggingFace config, resource
+URI, troubleshooting, roadmap).
+
 ## Testing
 
 There is no external service dependency for tests — the LLM and network calls are mocked via `unittest.mock`.

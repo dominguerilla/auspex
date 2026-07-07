@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: ["master"]
+    branches: ["master", "develop", "feature/**"]
   pull_request:
-    branches: ["master"]
+    branches: ["master", "develop"]
 
 jobs:
   test:
@@ -12,6 +12,26 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.12"]
+
+    # Postgres for the MCP server's job store (see docs/adr/0004). The MCP
+    # tests skip if this is absent; here it is always present so they run.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: auspex
+          POSTGRES_PASSWORD: auspex
+          POSTGRES_DB: auspex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://auspex:auspex@localhost:5432/auspex
 
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +47,9 @@ jobs:
 
       - name: Lint with ruff
         run: ruff check .
+
+      - name: Apply database migrations
+        run: alembic upgrade head
 
       - name: Run tests
         run: pytest -v

@@ -456,6 +456,14 @@ html, body {
   color: var(--ink-fade);
   margin-bottom: 4px;
 }
+.flow-working-stage-verb {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--ink-fade);
+  margin-top: 3px;
+  text-transform: uppercase;
+}
 .flow-working-stagebar {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -933,12 +941,9 @@ html, body {
 }
 
 /* ====================================================================
- * RESET / replay button — top corner during anything but idle
+ * RESET / replay button — lives in the top strip during working/complete
  * ==================================================================== */
 .flow-reset {
-  position: absolute;
-  top: 14px;
-  right: 18px;
   background: none;
   border: 1px solid var(--ink-faint);
   font-family: 'JetBrains Mono', monospace;
@@ -948,14 +953,84 @@ html, body {
   text-transform: uppercase;
   cursor: pointer;
   padding: 6px 10px;
-  z-index: 30;
-  display: none;
-}
-.flow-root[data-phase="working"] .flow-reset,
-.flow-root[data-phase="complete"] .flow-reset {
-  display: block;
 }
 .flow-reset:hover { color: var(--ink); border-color: var(--ink); }
+
+/* ====================================================================
+ * RESET CONFIRMATION DIALOG
+ * ==================================================================== */
+.flow-confirm-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 19, 11, 0.32);
+  z-index: 40;
+  backdrop-filter: blur(1px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flow-confirm-dialog {
+  background: var(--page);
+  border: 1px solid var(--ink);
+  padding: 28px 32px 24px;
+  width: min(380px, 88cqw);
+  box-shadow: 0 20px 60px -10px rgba(42, 24, 16, 0.35);
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.flow-confirm-dialog-title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.flow-confirm-dialog-body {
+  font-family: 'IM Fell English', Georgia, serif;
+  font-size: 14px;
+  color: var(--ink-fade);
+  line-height: 1.55;
+  margin-bottom: 22px;
+}
+
+.flow-confirm-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.flow-confirm-dialog-actions button {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 7px 18px;
+  cursor: pointer;
+  border: 1px solid var(--ink-faint);
+  background: none;
+  color: var(--ink-fade);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.flow-confirm-dialog-actions button:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.flow-confirm-dialog-actions .flow-confirm-yes {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.flow-confirm-dialog-actions .flow-confirm-yes:hover {
+  background: var(--ink);
+  color: var(--page);
+}
 
 /* ====================================================================
  * RESPONSIVE — phone collapse
@@ -974,6 +1049,22 @@ html, body {
   .flow-topstrip > :nth-child(1),
   .flow-topstrip > :nth-child(3) { display: none; }
   .flow-topstrip > :nth-child(2) { justify-self: center; }
+
+  /* During working/complete: status left, reset button right */
+  .flow-root[data-phase="working"] .flow-topstrip,
+  .flow-root[data-phase="complete"] .flow-topstrip {
+    grid-template-columns: 1fr auto;
+    text-align: left;
+  }
+  .flow-root[data-phase="working"] .flow-topstrip > :nth-child(2),
+  .flow-root[data-phase="complete"] .flow-topstrip > :nth-child(2) {
+    justify-self: start;
+  }
+  .flow-root[data-phase="working"] .flow-topstrip > :nth-child(3),
+  .flow-root[data-phase="complete"] .flow-topstrip > :nth-child(3) {
+    display: flex;
+    align-items: center;
+  }
 
   .flow-footer {
     font-size: 11px;

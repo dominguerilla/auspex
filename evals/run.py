@@ -23,8 +23,11 @@ from assay import Eval
 from assay.models import AgentOutput, Case
 from assay.scorers import LLMJudge
 
+from console_utf8 import configure_utf8_console
 from evals.adapter import run as agent
 from evals.scorers import MinSources, MustMention, MustNotMention
+
+configure_utf8_console()
 
 JUDGE_RUBRIC = (
     "Grade the agent's research report against the criteria in `expected.rubric`. "

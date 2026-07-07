@@ -46,7 +46,10 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+from console_utf8 import configure_utf8_console
 from graph.graph_builder import build_graph
+
+configure_utf8_console()
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
