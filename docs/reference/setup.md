@@ -1,13 +1,15 @@
 ---
-last_verified: 2026-06-12
-sources: [requirements.txt, .env.example, Dockerfile, .github/workflows/deploy-hf-spaces.yml, evals/requirements.txt]
+last_verified: 2026-07-13
+sources: [requirements.txt, .env.example, Dockerfile, .github/workflows/deploy-hf-spaces.yml, evals/requirements.txt, Makefile, docker-compose.yml, scripts/ingest_corpus.py, llm/embeddings.py]
 owner: Carlos
 status: draft
 ---
 
 # Setup
 
-All commands verified against the repo at commit `5c59f7e`. Run them in order; each step depends on the previous one.
+Run the steps in order; each depends on the previous one. Most commands have a
+`make` shortcut (see [Task runner](#task-runner-makefile) at the end) — the raw
+commands here are the explanation, the Makefile is the convenience.
 
 ---
 
@@ -19,6 +21,7 @@ All commands verified against the repo at commit `5c59f7e`. Run them in order; e
   ollama pull qwen2.5:3b
   ```
 - **HuggingFace account** — only needed for `LLM_PROVIDER=huggingface`. Create an access token at https://huggingface.co/settings/tokens.
+- **Docker** — only needed for the [corpus store](#corpus-store-rag-retrieval) (local Postgres + pgvector). Not required for the CLI, web UI, or tests.
 
 ---
 
@@ -95,6 +98,87 @@ python -m auspex.mcp_server
 ```
 
 Exposes `start_research`, `get_research_status`, and `get_research_report` as MCP tools over stdio. See [docs/mcp.md](../mcp.md) for Claude Desktop configuration.
+
+---
+
+## Corpus store (RAG retrieval)
+
+The RAG retrieval experiment ingests the Auspex repo itself into a pgvector
+store (`corpus_chunks`) so the pipeline can retrieve over its own source. This
+is independent of the SQLite/Postgres **job** store above; it needs its own
+local Postgres and an embedding model.
+
+> **Run this from WSL2/Linux, not native Windows.** The ingestion script opens a
+> `psycopg2` connection, which conflicts with the langgraph native stack on
+> native Windows (libpq DLL clash — see `CLAUDE.md`). The chunk-count preview
+> (`--dry-run`) is the exception; it touches neither Postgres nor Ollama.
+
+### 1. Start Postgres with pgvector
+
+```sh
+docker compose up -d --wait
+export DATABASE_URL=postgresql://auspex:auspex@localhost:5432/auspex
+```
+
+`docker-compose.yml` uses the `pgvector/pgvector:pg16` image — stock
+`postgres:16` lacks the `vector` extension the schema needs.
+
+### 2. Apply the schema migration
+
+```sh
+alembic upgrade head
+```
+
+Migration `0003` enables the `vector` extension and creates `corpus_chunks`
+(with a `vector(768)` embedding column and an HNSW cosine index).
+
+### 3. Pull the embedding model
+
+```sh
+ollama pull nomic-embed-text
+```
+
+The corpus embedding model is **frozen** (`nomic-embed-text`, 768-dim — see
+`llm/embeddings.py`). It is a controlled variable for the retrieval experiment:
+the same model must embed every chunk and every query, so it is pinned in code,
+not read from the environment. Changing it means a new migration (different
+dimension) and a full re-ingest.
+
+### 4. Ingest the corpus
+
+```sh
+# Preview chunk counts only — no Postgres, no Ollama (safe on native Windows):
+python -m scripts.ingest_corpus --dry-run
+
+# Full ingest at a pinned commit:
+python -m scripts.ingest_corpus --commit <sha>   # defaults to HEAD
+```
+
+The script reads the repo **at the pinned commit** (via `git`, not the working
+tree), chunks each file language-aware, embeds, and upserts on a content hash —
+so it is idempotent and safe to re-run. Pass an explicit `--commit` to be
+deliberate about which SHA the corpus freezes; `HEAD` is the default but freezes
+whatever you happen to be sitting on. Expect ~175 chunks for the current repo.
+
+---
+
+## Task runner (Makefile)
+
+Common workflows have `make` shortcuts (run `make` alone to list them):
+
+| Command | What it does |
+|---|---|
+| `make install` | Install base Python dependencies |
+| `make serve` | Run the web UI on :7860 |
+| `make mcp` | Run the MCP server over stdio |
+| `make test` / `make lint` / `make fmt` | pytest · ruff check · ruff autofix |
+| `make setup` | One-time corpus bringup: Postgres + migrate + pull model |
+| `make corpus` | Ingest the corpus (`make corpus COMMIT=<sha>` to pin) |
+| `make corpus-dry` | Chunk-count preview (no DB/Ollama) |
+| `make evals` | Run the evaluation suite |
+
+The corpus targets (`setup`, `db-up`, `migrate`, `corpus`) carry the same
+WSL2/Linux caveat noted above.
 
 ---
 

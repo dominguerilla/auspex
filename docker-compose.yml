@@ -1,11 +1,15 @@
-# Local Postgres for the MCP server's job store (see docs/adr/0004).
+# Local Postgres for the MCP server's job store (see docs/adr/0004) and the
+# RAG corpus store (pgvector, see alembic/0003 + scripts/ingest_corpus.py).
 # Usage:
 #   docker compose up -d
 #   export DATABASE_URL=postgresql://auspex:auspex@localhost:5432/auspex
 #   alembic upgrade head
 services:
   postgres:
-    image: postgres:16
+    # pgvector image = stock postgres:16 + the `vector` extension, required by
+    # the corpus_chunks table (migration 0003). Data volume is compatible with
+    # the plain postgres:16 image it replaces.
+    image: pgvector/pgvector:pg16
     container_name: auspex-postgres
     environment:
       POSTGRES_USER: auspex
