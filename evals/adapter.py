@@ -29,13 +29,15 @@ def _get_graph():
     return _graph
 
 
-def _initial_state(question: str, max_iterations: int) -> dict[str, Any]:
+def _initial_state(question: str, max_iterations: int, retrieval: str) -> dict[str, Any]:
     return {
         "research_question": question,
         "max_iterations": max_iterations,
+        "retrieval": retrieval,
         "iteration": 0,
         "search_queries": [],
         "search_results": [],
+        "corpus_results": [],
         "sources": [],
         "critique": None,
         "final_report": None,
@@ -51,8 +53,13 @@ def run(input: dict) -> dict:
     """
     question = input["question"]
     max_iterations = int(input.get("max_iterations", 2))
+    # The A/B independent variable. Cases (or the run harness) set retrieval
+    # on/off; defaults off so existing suites run the web-only baseline.
+    retrieval = str(input.get("retrieval", "off"))
 
-    final_state = _get_graph().invoke(_initial_state(question, max_iterations))
+    final_state = _get_graph().invoke(
+        _initial_state(question, max_iterations, retrieval)
+    )
 
     report = final_state.get("final_report") or ""
     return {
@@ -60,6 +67,7 @@ def run(input: dict) -> dict:
         "data": {
             "text": report,
             "sources": final_state.get("sources") or [],
+            "corpus_results": final_state.get("corpus_results") or [],
             "critique": final_state.get("critique"),
             "iterations_used": final_state.get("iteration", 0),
             "agent_model": _agent_model_name(),

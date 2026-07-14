@@ -183,6 +183,12 @@ async def run_job(job_id: str, question: str, max_iterations: int) -> None:
         async for step in graph.astream(initial_state):
             # graph.astream yields {node_name: state_delta} after each node finishes
             for node_name, delta in step.items():
+                # Nodes outside the frontend contract have no spirit to render.
+                # corpus_retriever runs on every invocation but is inert here
+                # (the web UI is web-only — retrieval defaults off), so skip it
+                # rather than stream an out-of-contract event to the product.
+                if node_name not in NODE_ORDER:
+                    continue
                 payload = build_node_payload(node_name, delta)
                 job.append("node_complete", payload)
 

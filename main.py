@@ -75,6 +75,13 @@ def parse_args():
         default="output",
         help="Directory to write the report into (default: output/)",
     )
+    parser.add_argument(
+        "--retrieval",
+        choices=["off", "on"],
+        default="off",
+        help="RAG corpus retrieval: 'off' (web-only baseline) or 'on' "
+        "(retrieve from the pgvector corpus). Default: off.",
+    )
     return parser.parse_args()
 
 
@@ -97,9 +104,11 @@ def main():
     initial_state = {
          "research_question": args.question,
          "max_iterations": args.max_iterations,
+         "retrieval": args.retrieval,
          "iteration": 0,
          "search_queries": [],
          "search_results": [],
+         "corpus_results": [],
          "sources": [],
          "critique": None,
          "final_report": None,

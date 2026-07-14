@@ -7,16 +7,17 @@ Source summaries:
 
 Critic's notes: {critique_feedback}
 
-IMPORTANT: You may ONLY cite URLs that appear in the source summaries above. Do NOT
-invent, guess, or recall URLs from your training data. Every {citation_format} citation
-must use a URL from the list above verbatim. If a claim cannot be tied to one of
-these sources, present it without a citation or omit it.
+IMPORTANT: You may ONLY cite the identifier shown in each source's `###` heading
+above — a URL for web sources, or a `path:Lstart-Lend` file reference for corpus
+sources. Do NOT invent, guess, or recall identifiers from your training data.
+Every {citation_format} citation must use one of those identifiers verbatim. If a
+claim cannot be tied to one of these sources, present it without a citation or omit it.
 
 Write a research report in Markdown format with:
 1. An executive summary (2-3 sentences)
 2. Key findings organised by theme (use ## headers)
 3. Specific evidence and examples from the sources
 4. A balanced conclusion that directly answers the research question
-5. A "Sources" section listing ONLY the URLs from above that you actually cited
+5. A "Sources" section listing ONLY the identifiers from above that you actually cited
 
-The report should be thorough but readable — aim for 600-1000 words. Use bullet points for lists of tradeoffs or comparisons. Cite sources inline using Markdown link syntax: {citation_format} — the URL goes inside parentheses, NOT inside the square brackets. Example: `[Source](https://example.com/article)`. Do not write `[Source: https://example.com/article]`.
+The report should be thorough but readable — aim for 600-1000 words. Use bullet points for lists of tradeoffs or comparisons. Cite sources inline using Markdown link syntax: {citation_format} — the identifier goes inside parentheses, NOT inside the square brackets. Examples: `[Source](https://example.com/article)` for a web source, `[Source](graph/state.py:L72-L118)` for a corpus source. Do not write `[Source: https://example.com/article]`.

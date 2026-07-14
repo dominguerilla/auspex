@@ -40,6 +40,11 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
+# Pure string helper (no langchain/ollama import), so top-level import here keeps
+# --dry-run free of heavy deps. The embedder itself is still imported lazily in
+# main() only when an actual embed is needed.
+from llm.embeddings import to_pgvector_literal
+
 # --- Chunk sizing --------------------------------------------------------
 # The plan targets ~500-800 tokens/chunk with ~10-15% overlap on fixed paths.
 # We approximate tokens as chars/4 (good enough for sizing; no tokenizer dep).
@@ -323,11 +328,6 @@ def chunk_file(path: str, text: str, language: str) -> list[Chunk]:
 # Persistence
 # ---------------------------------------------------------------------------
 
-def _format_vector(vec: list[float]) -> str:
-    """pgvector text literal, e.g. '[0.1,0.2,...]', for a ``%s::vector`` bind."""
-    return "[" + ",".join(repr(float(x)) for x in vec) + "]"
-
-
 def _insert_chunks(conn, corpus_name: str, commit_sha: str, rows: list[tuple[Chunk, list[float]]]) -> int:
     """Insert (chunk, embedding) rows, skipping content-hash duplicates.
 
@@ -349,7 +349,7 @@ def _insert_chunks(conn, corpus_name: str, commit_sha: str, rows: list[tuple[Chu
                     corpus_name, commit_sha, chunk.file_path, chunk.chunk_index,
                     chunk.start_line, chunk.end_line, chunk.content,
                     chunk.content_hash, chunk.language, chunk.symbol_name,
-                    _format_vector(embedding),
+                    to_pgvector_literal(embedding),
                 ),
             )
             inserted += cur.rowcount

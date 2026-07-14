@@ -29,6 +29,7 @@ Hint — conditional edge syntax:
 
 from langgraph.graph import END, START, StateGraph
 
+from agents.corpus_retriever import run_corpus_retriever
 from agents.critic import run_critic
 from agents.orchestrator import run_orchestrator
 from agents.reader import run_reader
@@ -47,6 +48,7 @@ def build_graph():
     # Each string name becomes addressable as a node in add_edge / add_conditional_edges.
     graph.add_node("orchestrator", run_orchestrator)
     graph.add_node("searcher", run_searcher)
+    graph.add_node("corpus_retriever", run_corpus_retriever)
     graph.add_node("reader", run_reader)
     graph.add_node("critic", run_critic)
     graph.add_node("refiner", run_refiner)
@@ -55,8 +57,15 @@ def build_graph():
     # --- Entry point ---
     graph.add_edge(START, "orchestrator")
 
-    graph.add_edge("orchestrator","searcher")
-    graph.add_edge("searcher","reader")
+    # The orchestrator fans out to the web searcher AND the corpus retriever;
+    # both feed the reader, which fans them back in (LangGraph waits for all
+    # parents). The corpus_retriever is inert unless retrieval="on", so this
+    # topology is identical for the baseline and retrieval conditions — only the
+    # flag changes (build plan §1.2).
+    graph.add_edge("orchestrator", "searcher")
+    graph.add_edge("orchestrator", "corpus_retriever")
+    graph.add_edge("searcher", "reader")
+    graph.add_edge("corpus_retriever", "reader")
     graph.add_edge("reader","critic")
 
     graph.add_conditional_edges(

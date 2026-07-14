@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-12
+last_verified: 2026-07-13
 sources: [main.py, app.py, auspex/mcp_server/server.py, graph/graph_builder.py, graph/state.py, llm/ollama_client.py, llm/contract.py]
 owner: Carlos
 status: draft
@@ -7,7 +7,9 @@ status: draft
 
 # Auspex — Start Here
 
-Auspex is a LangGraph multi-agent research pipeline that answers a question by routing a shared `ResearchState` dict through six agent nodes — orchestrator, searcher, reader, critic, refiner, writer. It has three entrypoints: a CLI (`main.py`) that writes a Markdown report to disk, a FastAPI server (`app.py`) that streams per-node progress to a React frontend over SSE and persists completed jobs in SQLite, and an MCP server (`auspex/mcp_server/`) that exposes the pipeline as tools for Claude Desktop and other MCP clients. All three call the same `build_graph()` function.
+Auspex is a LangGraph multi-agent research pipeline that answers a question by routing a shared `ResearchState` dict through seven agent nodes — orchestrator, searcher, corpus_retriever, reader, critic, refiner, writer. It has three entrypoints: a CLI (`main.py`) that writes a Markdown report to disk, a FastAPI server (`app.py`) that streams per-node progress to a React frontend over SSE and persists completed jobs in SQLite, and an MCP server (`auspex/mcp_server/`) that exposes the pipeline as tools for Claude Desktop and other MCP clients. All three call the same `build_graph()` function.
+
+**RAG retrieval (experimental).** The `corpus_retriever` node runs parallel to the web searcher and is gated by a single `retrieval` state flag (`"off"` default → web-only baseline; `"on"` → retrieve from the pgvector corpus store). It is inert unless the flag is on, so the pipeline topology is identical across both conditions — the flag is the one independent variable of a flat-retrieval A/B experiment. Ingest the corpus with `make corpus` (see [setup](docs/reference/setup.md#corpus-store-rag-retrieval)).
 
 ## Doc map
 

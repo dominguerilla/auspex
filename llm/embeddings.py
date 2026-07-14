@@ -49,3 +49,12 @@ def describe_embedder() -> dict:
         "model": EMBEDDING_MODEL,
         "dim": EMBEDDING_DIM,
     }
+
+
+def to_pgvector_literal(vec) -> str:
+    """Format an embedding as a pgvector text literal for a ``%s::vector`` bind.
+
+    e.g. ``[0.1,0.2,...]``. Shared by the ingest INSERT and the retrieval query
+    so both encode vectors identically.
+    """
+    return "[" + ",".join(repr(float(x)) for x in vec) + "]"

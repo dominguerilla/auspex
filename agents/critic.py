@@ -54,10 +54,16 @@ def run_critic(state: ResearchState) -> dict:
     llm = get_llm(temperature=0.1)
     prompt_template = _PROMPT_PATH.read_text()
 
-    # Build a summary of sources for the prompt
-    sources_text = "\n\n".join(
-        f"Source: {s['url']}\n{s['summary']}" for s in state["sources"]
-    )
+    # Build a summary of sources for the prompt. Include corpus chunks (empty
+    # unless retrieval="on") so the critic assesses coverage over the same
+    # evidence the writer will see — otherwise it would judge the retrieval
+    # condition on web sources alone.
+    source_blocks = [f"Source: {s['url']}\n{s['summary']}" for s in state["sources"]]
+    source_blocks += [
+        f"Source: {c['file_path']}:L{c['start_line']}-L{c['end_line']}\n{c['content']}"
+        for c in state.get("corpus_results", [])
+    ]
+    sources_text = "\n\n".join(source_blocks)
 
     prompt = prompt_template.format(
         research_question=state["research_question"],

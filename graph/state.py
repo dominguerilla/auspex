@@ -65,6 +65,23 @@ class CritiqueResult(TypedDict):
     missing_topics: List[str]  # Specific gaps; orchestrator can use these on re-run
 
 
+class RetrievedChunk(TypedDict):
+    """One chunk retrieved from the pgvector corpus (RAG retrieval, Phase 1).
+
+    The provenance fields (file_path, start_line, end_line, commit_sha) are what
+    let the writer cite corpus evidence at file+line and make the faithfulness
+    scorer checkable — the corpus analogue of a web source's URL.
+    """
+    chunk_id: int         # corpus_chunks.id
+    file_path: str
+    start_line: Optional[int]
+    end_line: Optional[int]
+    commit_sha: str
+    content: str
+    similarity: float     # cosine similarity to the query (1.0 = identical)
+    source: str           # always "corpus" — distinguishes from web ScrapedSource
+
+
 # ---------------------------------------------------------------------------
 # Top-level state
 # ---------------------------------------------------------------------------
@@ -74,6 +91,13 @@ class ResearchState(TypedDict):
     research_question: str
     max_iterations: int
 
+    # RAG retrieval flag — the single independent variable of the Phase 1 A/B.
+    # "off" (default): web-only baseline, the corpus_retriever node is inert.
+    # "on": the corpus_retriever embeds the question and retrieves from pgvector.
+    # Read via state.get("retrieval", "off") so states built before this field
+    # existed (and the web-only entrypoints) keep working unchanged.
+    retrieval: str
+
     # --- Orchestrator writes ---
     search_queries: List[str]
 
@@ -82,6 +106,9 @@ class ResearchState(TypedDict):
 
     # --- Searcher writes ---
     search_results: List[SearchResult]
+
+    # --- Corpus retriever writes (empty when retrieval="off") ---
+    corpus_results: List[RetrievedChunk]
 
     # --- Reader writes ---
     sources: List[ScrapedSource]

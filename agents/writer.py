@@ -28,11 +28,37 @@ from pathlib import Path
 
 from langchain_core.messages import HumanMessage
 
-from graph.state import ResearchState
+from graph.state import ResearchState, RetrievedChunk
 from llm.contract import CITATION_FORMAT_HINT
 from llm.ollama_client import get_llm
 
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "writer.txt"
+
+
+def corpus_citation_id(chunk: RetrievedChunk) -> str:
+    """The identifier the writer cites a corpus chunk by: ``path:Lstart-Lend``.
+
+    This is the corpus analogue of a web source's URL — it points citations at
+    file+line, which is what makes the faithfulness scorer checkable.
+    """
+    start, end = chunk.get("start_line"), chunk.get("end_line")
+    lines = f":L{start}-L{end}" if start is not None else ""
+    return f"{chunk['file_path']}{lines}"
+
+
+def render_sources(state: ResearchState) -> str:
+    """Combine web sources and corpus chunks into one citable source block.
+
+    Each entry's ``### <identifier>`` heading is the exact string the writer must
+    cite it by. Corpus chunks are only present when retrieval is "on"; when the
+    list is empty this renders exactly the web-only block it always did.
+    """
+    blocks = [f"### {s['url']}\n{s['summary']}" for s in state["sources"]]
+    blocks += [
+        f"### {corpus_citation_id(c)}\n{c['content']}"
+        for c in state.get("corpus_results", [])
+    ]
+    return "\n\n".join(blocks)
 
 
 def run_writer(state: ResearchState) -> dict:
@@ -52,9 +78,7 @@ def run_writer(state: ResearchState) -> dict:
     llm = get_llm(temperature=0.5)
     prompt_template = _PROMPT_PATH.read_text()
 
-    sources_text = "\n\n".join(
-        f"### {s['url']}\n{s['summary']}" for s in state["sources"]
-    )
+    sources_text = render_sources(state)
     critique_feedback = state["critique"]["feedback"] if state["critique"] else "N/A"
     prompt = prompt_template.format(
         research_question=state["research_question"],

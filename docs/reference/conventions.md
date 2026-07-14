@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-16
+last_verified: 2026-07-13
 sources: [pyproject.toml, .github/workflows/test.yml, graph/state.py, agents/refiner.py, tests/conftest.py, prompts/]
 owner: Carlos
 status: draft
@@ -58,9 +58,9 @@ Source pattern: `agents/refiner.py:22-64`
 
 ## State field rules
 
-- **Last-write-wins** fields (`search_queries`, `search_results`, `sources`, `critique`, `final_report`): an agent's return dict replaces the field entirely. Do not append — return the full new value.
+- **Last-write-wins** fields (`search_queries`, `search_results`, `corpus_results`, `sources`, `critique`, `final_report`): an agent's return dict replaces the field entirely. Do not append — return the full new value.
 - **Append-only** field (`messages`): use `return {"messages": [AIMessage(content="...")]}` — the `add_messages` reducer handles appending.
-- Never mutate `research_question` or `max_iterations` after initial state construction.
+- Never mutate `research_question`, `max_iterations`, or `retrieval` after initial state construction.
 
 Source: `graph/state.py`
 

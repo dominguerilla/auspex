@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-17
+last_verified: 2026-07-13
 sources: [graph/graph_builder.py, graph/state.py, graph/edges.py, agents/, llm/ollama_client.py, llm/contract.py, tools/, app.py, auspex/mcp_server/server.py, auspex/mcp_server/__main__.py, alembic/, prompts/]
 owner: Carlos
 status: draft
@@ -9,7 +9,9 @@ status: draft
 
 ## Overview
 
-Auspex is a **LangGraph `StateGraph`** pipeline. A single shared dict (`ResearchState`) flows through six agent nodes; each node reads from and writes back to that dict. The graph is compiled once at startup (`build_graph()` in `graph/graph_builder.py`) and reused for every research run.
+Auspex is a **LangGraph `StateGraph`** pipeline. A single shared dict (`ResearchState`) flows through seven agent nodes; each node reads from and writes back to that dict. The graph is compiled once at startup (`build_graph()` in `graph/graph_builder.py`) and reused for every research run.
+
+One of the seven, `corpus_retriever`, is an experimental RAG node gated by the `retrieval` flag (`"off"` default); it runs parallel to the web `searcher` and is inert unless retrieval is `"on"`. See [Corpus retrieval](#corpus-retrieval-rag) below.
 
 Three entrypoints drive the same graph:
 
@@ -27,16 +29,15 @@ Three entrypoints drive the same graph:
 START
   │
   ▼
-orchestrator  ──────────────────────────────────────────────────►  searcher
-                                                                        │
-                                                                        ▼
-                                                                      reader
-                                                                        │
-                                                                        ▼
-                                                                      critic
-                                                                        │
-                              should_revise_or_write(state)  ◄──────────┘
-                                        │
+orchestrator ──┬──────────────►  searcher ─────────┐
+               │                                    ▼
+               └──►  corpus_retriever ───────────► reader
+                     (inert unless retrieval=on)     │
+                                                      ▼
+                                                    critic
+                                                      │
+                        should_revise_or_write(state) │
+                                        │◄────────────┘
                     ┌───────────────────┴───────────────────────┐
                     │ critique.passed == False                   │ critique.passed == True
                     │ AND iteration < max_iterations             │ OR iteration >= max_iterations
@@ -47,7 +48,10 @@ orchestrator  ──────────────────────
                                                                  END
 ```
 
-Source: `graph/graph_builder.py:42-73`, routing logic: `graph/edges.py:27-42`
+The orchestrator fans out to `searcher` and `corpus_retriever`; both feed
+`reader`, which fans them back in (LangGraph waits for all parents). The refine
+loop re-enters at `searcher` only — the corpus is static, so it is retrieved
+once. Source: `graph/graph_builder.py:42-84`, routing logic: `graph/edges.py:27-42`
 
 ---
 
@@ -57,10 +61,11 @@ Source: `graph/graph_builder.py:42-73`, routing logic: `graph/edges.py:27-42`
 |---|---|---|---|
 | `orchestrator` | `agents/orchestrator.py:run_orchestrator` | `research_question` | `search_queries`, `messages` |
 | `searcher` | `agents/searcher.py:run_searcher` | `search_queries` | `search_results` |
+| `corpus_retriever` | `agents/corpus_retriever.py:run_corpus_retriever` | `retrieval`, `research_question` | `corpus_results` |
 | `reader` | `agents/reader.py:run_reader` | `search_results`, `research_question` | `sources` |
-| `critic` | `agents/critic.py:run_critic` | `sources`, `research_question`, `iteration` | `critique`, `iteration` |
+| `critic` | `agents/critic.py:run_critic` | `sources`, `corpus_results`, `research_question`, `iteration` | `critique`, `iteration` |
 | `refiner` | `agents/refiner.py:run_refiner` | `critique` (`missing_topics`, `feedback`), `research_question` | `search_queries` |
-| `writer` | `agents/writer.py:run_writer` | `research_question`, `sources`, `critique` | `final_report` |
+| `writer` | `agents/writer.py:run_writer` | `research_question`, `sources`, `corpus_results`, `critique` | `final_report` |
 
 ---
 
@@ -71,6 +76,7 @@ class ResearchState(TypedDict):
     # Set once at invocation, never mutated
     research_question: str
     max_iterations: int
+    retrieval: str                       # "off" (default) | "on" — the A/B flag
 
     # Orchestrator / refiner writes; searcher reads
     search_queries: List[str]
@@ -80,6 +86,10 @@ class ResearchState(TypedDict):
 
     # Searcher writes (last-write-wins)
     search_results: List[SearchResult]   # {title, url, snippet}
+
+    # Corpus retriever writes (empty unless retrieval="on")
+    corpus_results: List[RetrievedChunk] # {chunk_id, file_path, start/end_line,
+                                         #  commit_sha, content, similarity, source}
 
     # Reader writes (last-write-wins)
     sources: List[ScrapedSource]         # {url, summary, raw_length}
@@ -97,6 +107,33 @@ class ResearchState(TypedDict):
 **Reducer rules** (source: `graph/state.py:35-43`):
 - `messages` — `add_messages` reducer: each agent's `return {"messages": [...]}` *appends*, never replaces.
 - All other fields — default (last-write-wins): the most recent node write is what the next node sees.
+
+---
+
+## Corpus retrieval (RAG)
+
+`corpus_retriever` (`agents/corpus_retriever.py`) is the retrieval half of a
+flat-retrieval A/B experiment (build plan Phase 1). It embeds the research
+question with the frozen corpus model (`llm/embeddings.py`, Ollama
+`nomic-embed-text`, 768-dim) and runs a cosine top-k (k=8) query over the
+`corpus_chunks` pgvector table (schema: `alembic/0003`, populated by
+`scripts/ingest_corpus.py`). Retrieved chunks carry file+line provenance so the
+writer can cite corpus evidence at `path:Lstart-Lend` — the corpus analogue of a
+web source's URL.
+
+- **Single independent variable.** The `retrieval` state flag (`"off"` | `"on"`)
+  is the only thing that differs between the web-only baseline and the retrieval
+  condition. The node is always in the graph but returns immediately (no
+  embedding, no DB) when `off`, so the pipeline is one codepath — "flip the flag,
+  nothing else changes."
+- **Consumption.** `writer` and `critic` render `corpus_results` alongside web
+  `sources` (see `render_sources()` in `agents/writer.py`); the writer prompt
+  cites both by the identifier in each source heading. When `retrieval="off"`,
+  `corpus_results` is empty and both behave exactly as the web-only pipeline.
+- **Where the flag is set.** `main.py --retrieval on|off` and the eval adapter
+  (`evals/adapter.py`, from the case input). The web UI and MCP server leave it
+  at the `"off"` default. Requires Postgres/pgvector — see
+  [setup](setup.md#corpus-store-rag-retrieval).
 
 ---
 
