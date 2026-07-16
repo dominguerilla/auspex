@@ -101,6 +101,39 @@ It checks the tier counts (8/8/7/2), required fields, and that every
 `grounding_files` path exists at the pinned commit. It does **not** run the
 pipeline — that's the scorer/run work in §1.4–§1.5.
 
+## Known confound: public-repo leakage in the baseline
+
+The corpus is this repo, and it is **public** on GitHub
+(`github.com/dominguerilla/auspex`). So the web-only baseline (`retrieval=off`)
+has a potential backdoor to the corpus: if its DuckDuckGo search surfaces the
+repo, its scraper can read answers straight from the public README/code — many
+T1/T2 facts are stated there (providers, MCP tool names, node names, SQLite,
+Python versions). A few are corpus-only (bearer/`AUSPEX_MCP_TOKEN`, the Anthropic
+provider, deep code internals like `ThreadPoolExecutor(max_workers=3)`).
+
+Whether it actually leaks is empirical — "Auspex" is an overloaded search term
+and the queries never name the owner, so ranking is likely weak — but it must be
+**measured, not assumed**.
+
+**Do NOT mitigate by blocklisting GitHub from the baseline's search.** That
+changes the search between conditions, violates the single-codepath rule (§1.0),
+and biases the experiment toward retrieval. The baseline stays honest, backdoor
+and all.
+
+**§1.5 readout requirement — measure the leakage as a covariate:**
+
+- For each **baseline** (`retrieval=off`) run, scan `data["sources"]` URLs for the
+  repo domains (`github.com/dominguerilla/auspex`,
+  `raw.githubusercontent.com/dominguerilla/auspex`). Record a per-run
+  `reached_repo` boolean.
+- In `results/phase1_readout.md`, report the **leakage rate per tier** alongside
+  the on/off faithfulness/correctness deltas.
+- Interpret accordingly:
+  - **leakage ≈ 0** → clean on-vs-off, as originally framed;
+  - **leakage high** → the comparison is honestly "structured pgvector retrieval
+    vs. a web baseline that can reach the public repo" — a harder, more realistic
+    baseline. Corpus winning it is a stronger result; a tie is still a real finding.
+
 ## Status
 
 - [x] Scaffolding, schema, validator (§1.3 structure)
@@ -109,3 +142,4 @@ pipeline — that's the scorer/run work in §1.4–§1.5.
       `grounding_files` (§1.4)
 - [ ] κ calibration on ~15 answers (§1.4)
 - [ ] 150-run protocol + `results/phase1_readout.md` (§1.5)
+- [ ] Baseline repo-leakage covariate in the readout (see "Known confound" above) (§1.5)
