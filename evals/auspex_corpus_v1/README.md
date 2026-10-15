@@ -137,7 +137,7 @@ and all.
 ## Status
 
 - [x] Scaffolding, schema, validator (§1.3 structure)
-- [ ] 25 questions authored (yours to write)
+- [x] 25 questions authored (yours to write)
 - [ ] Faithfulness + correctness scorers wired against `gold_answer` /
       `grounding_files` (§1.4)
 - [ ] κ calibration on ~15 answers (§1.4)
