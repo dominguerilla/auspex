@@ -101,6 +101,43 @@ It checks the tier counts (8/8/7/2), required fields, and that every
 `grounding_files` path exists at the pinned commit. It does **not** run the
 pipeline — that's the scorer/run work in §1.4–§1.5.
 
+## Scoring (§1.4)
+
+`python -m evals.run --corpus-suite` swaps the generic judge for the scorers in
+`scorers.py`, alongside the existing `must_mention` / `must_not_mention` /
+`min_sources` (which now counts corpus chunks too):
+
+| Scorer | Kind | Measures |
+|---|---|---|
+| `correctness` | LLM judge | report vs. `gold_answer` + `rubric`; never sees sources |
+| `faithfulness` | LLM judge | claims supported by the agent's own evidence (web summaries + corpus chunks); never sees the gold |
+| `grounding_retrieved` | programmatic | `grounding_files` among retrieved chunks (`retrieval=on` only) |
+| `grounding_cited` | programmatic | `grounding_files` paths cited in the report |
+| `repo_leakage` | covariate | `reached_repo` — a web source hit the public repo; run mean = leakage rate |
+
+Both judges see only the question, not `input.retrieval`, so they are blind to
+the arm except through citation style (URLs vs. `path:Lx-Ly`) — note that in the
+readout. Judge labels are fixed (`correct|partial|incorrect`,
+`faithful|partially_faithful|unfaithful`) for κ calibration. Grounding scorers
+return `passed=None` when not applicable (T4, or the off arm), which the summary
+*mean* still counts — read them by **pass rate**.
+
+Generate once, score offline, so judge changes during calibration don't cost
+pipeline re-runs. One outputs file per (condition, seed):
+
+```sh
+for seed in 1 2 3; do for r in off on; do
+  python -m evals.generate --dataset evals/auspex_corpus_v1/cases.jsonl --retrieval $r \
+    --output evals/outputs/corpus_v1_retrieval-${r}_seed${seed}.jsonl
+done; done
+
+python -m evals.run --corpus-suite --from-outputs evals/outputs/corpus_v1_retrieval-on_seed1.jsonl \
+  --judge-provider anthropic --judge-model <pinned-model-id>
+```
+
+Use a judge model different from (and stronger than) the agent model, at the
+judge's default temperature 0.
+
 ## Known confound: public-repo leakage in the baseline
 
 The corpus is this repo, and it is **public** on GitHub
@@ -138,8 +175,9 @@ and all.
 
 - [x] Scaffolding, schema, validator (§1.3 structure)
 - [x] 25 questions authored (yours to write)
-- [ ] Faithfulness + correctness scorers wired against `gold_answer` /
+- [x] Faithfulness + correctness scorers wired against `gold_answer` /
       `grounding_files` (§1.4)
 - [ ] κ calibration on ~15 answers (§1.4)
 - [ ] 150-run protocol + `results/phase1_readout.md` (§1.5)
 - [ ] Baseline repo-leakage covariate in the readout (see "Known confound" above) (§1.5)
+      — measured per run by the `repo_leakage` scorer; per-tier reporting still to do

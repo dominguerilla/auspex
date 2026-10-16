@@ -86,7 +86,11 @@ class MustNotMention(Scorer):
 
 
 class MinSources(Scorer):
-    """Pass iff the agent collected at least ``case.expected['min_sources']`` sources."""
+    """Pass iff the agent collected at least ``case.expected['min_sources']`` sources.
+
+    Counts web sources plus retrieved corpus chunks, so ``retrieval=on`` runs
+    are credited for corpus evidence (``corpus_results`` is empty when off).
+    """
 
     name: ClassVar[str] = "min_sources"
 
@@ -97,10 +101,9 @@ class MinSources(Scorer):
             return Score(scorer=self.name, value=1.0, passed=None,
                          explanation="No min_sources configured.")
 
-        sources = []
+        n = 0
         if isinstance(output.data, dict):
-            sources = output.data.get("sources") or []
-        n = len(sources)
+            n = len(output.data.get("sources") or []) + len(output.data.get("corpus_results") or [])
         passed = n >= threshold
         return Score(
             scorer=self.name,

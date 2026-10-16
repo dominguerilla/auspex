@@ -6,6 +6,10 @@ Usage:
     python -m evals.run --concurrency 1                    # serialize (kinder to DuckDuckGo + Ollama)
     python -m evals.run --skip-judge-check                 # skip connectivity pre-flight
     python -m evals.run --from-outputs evals/outputs/x.jsonl  # score pre-generated outputs
+
+Corpus A/B experiment (evals/auspex_corpus_v1):
+    python -m evals.run --corpus-suite --retrieval on      # live run, one arm
+    python -m evals.run --corpus-suite --from-outputs evals/outputs/x.jsonl --judge-provider anthropic
 """
 
 from __future__ import annotations
@@ -25,6 +29,13 @@ from assay.scorers import LLMJudge
 
 from console_utf8 import configure_utf8_console
 from evals.adapter import run as agent
+from evals.auspex_corpus_v1.scorers import (
+    CorrectnessJudge,
+    FaithfulnessJudge,
+    GroundingCited,
+    GroundingRetrieved,
+    RepoLeakage,
+)
 from evals.scorers import MinSources, MustMention, MustNotMention
 
 configure_utf8_console()
@@ -37,6 +48,8 @@ JUDGE_RUBRIC = (
     "rubric; 0.0 = fully fails it."
 )
 """Rubric for the LLM judge to evaluate research reports. Used when --skip-judge is not set."""
+
+CORPUS_DATASET = Path(__file__).parent / "auspex_corpus_v1" / "cases.jsonl"
 
 
 def _judge_diagnostics(judge: LLMJudge) -> str:
@@ -66,6 +79,24 @@ def _strip_outputs_to_tmpfile(outputs_path: Path) -> Path:
     )
     for entry in entries:
         tmp.write(json.dumps({k: v for k, v in entry.items() if k != "output"}) + "\n")
+    tmp.close()
+    return Path(tmp.name)
+
+
+def _with_retrieval_tmpfile(dataset_path: Path, retrieval: str) -> Path:
+    """Write a temp copy of ``dataset_path`` with ``input.retrieval`` set on every case.
+
+    The A/B condition is swept at run time, never stored in the case file
+    (see evals/auspex_corpus_v1/README.md).
+    """
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+    )
+    for line in dataset_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            case = json.loads(line)
+            case["input"]["retrieval"] = retrieval
+            tmp.write(json.dumps(case) + "\n")
     tmp.close()
     return Path(tmp.name)
 
@@ -137,7 +168,26 @@ def main() -> None:
                         metavar="OUTPUTS_JSONL",
                         help="Score pre-generated outputs instead of running the agent "
                              "(produced by evals.generate)")
+    parser.add_argument("--retrieval", choices=["on", "off"], default=None,
+                        help="A/B condition for a live run: set input.retrieval on every case. "
+                             "Not valid with --from-outputs (saved outputs already carry it).")
+    parser.add_argument("--corpus-suite", action="store_true",
+                        help="Corpus A/B experiment: default the dataset to "
+                             "evals/auspex_corpus_v1/cases.jsonl and score with the split "
+                             "correctness/faithfulness judges, grounding scorers, and the "
+                             "repo-leakage covariate instead of the generic judge.")
     args = parser.parse_args()
+
+    if args.retrieval and args.from_outputs is not None:
+        print("ERROR: --retrieval applies to live runs only; the condition is already "
+              "saved in the outputs (use evals.generate --retrieval).", file=sys.stderr)
+        sys.exit(1)
+    if args.corpus_suite and args.from_outputs is None \
+            and args.dataset == Path(__file__).parent / "cases" / "cases.jsonl":
+        args.dataset = CORPUS_DATASET
+    dataset_stem = Path(args.dataset).stem
+    if args.retrieval:
+        dataset_stem = f"{dataset_stem}_retrieval-{args.retrieval}"
 
     if args.from_outputs is not None:
         if not args.from_outputs.exists():
@@ -152,6 +202,9 @@ def main() -> None:
         print(f"Replaying outputs from {args.from_outputs}", flush=True)
     else:
         _tmp_dataset = None
+        if args.retrieval:
+            _tmp_dataset = _with_retrieval_tmpfile(args.dataset, args.retrieval)
+            args.dataset = _tmp_dataset
         agent_fn = agent
         print("Checking agent LLM connectivity...", flush=True)
         try:
@@ -164,17 +217,24 @@ def main() -> None:
         print("Agent LLM OK.", flush=True)
 
     scorers = [MustMention(), MustNotMention(), MinSources()]
+    if args.corpus_suite:
+        scorers += [GroundingRetrieved(), GroundingCited(), RepoLeakage()]
     judge = None
     judge_model: str | None = None
     if not args.skip_judge:
         judge_model = args.judge_model
         if judge_model is None and args.judge_provider == "ollama":
             judge_model = os.environ.get("OLLAMA_MODEL")
-        judge_kwargs = {"rubric": JUDGE_RUBRIC, "provider": args.judge_provider}
+        judge_kwargs = {"provider": args.judge_provider}
         if judge_model:
             judge_kwargs["model"] = judge_model
-        judge = LLMJudge(**judge_kwargs)
-        scorers.append(judge)
+        if args.corpus_suite:
+            judges = [CorrectnessJudge(**judge_kwargs), FaithfulnessJudge(**judge_kwargs)]
+        else:
+            judges = [LLMJudge(rubric=JUDGE_RUBRIC, **judge_kwargs)]
+        # Both corpus judges share provider + model, so one connectivity check covers them.
+        judge = judges[0]
+        scorers += judges
 
     # Give the replay function a descriptive identity so the report shows what was scored.
     if args.from_outputs is not None:
@@ -216,7 +276,7 @@ def main() -> None:
         # Strip any leading YYYYMMDD_HHMMSS_ timestamp already in the outputs filename.
         dataset_part = re.sub(r"^\d{8}_\d{6}_", "", args.from_outputs.stem) or args.from_outputs.stem
     else:
-        dataset_part = Path(args.dataset).stem
+        dataset_part = dataset_stem
     judge_part = (
         "judge-" + re.sub(r"[:/\\]", "-", judge_model) if judge_model else "no-judge"
     )

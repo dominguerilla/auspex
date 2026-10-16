@@ -6,6 +6,7 @@ The saved outputs can later be scored with ``evals.run --from-outputs``.
 Usage:
     python -m evals.generate --dataset evals/cases/cases.jsonl
     python -m evals.generate --dataset evals/cases/single_factoid.jsonl --output evals/outputs/quick.jsonl
+    python -m evals.generate --dataset evals/auspex_corpus_v1/cases.jsonl --retrieval on
 """
 
 from __future__ import annotations
@@ -48,6 +49,16 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--retrieval",
+        choices=["on", "off"],
+        default=None,
+        help=(
+            "A/B condition: set input.retrieval on every case. The value is saved "
+            "with each output, so --from-outputs scoring keeps the arms apart. "
+            "Default: leave cases as-is (the adapter treats unset as off)."
+        ),
+    )
+    parser.add_argument(
         "--skip-connectivity-check",
         action="store_true",
         help="Skip the agent LLM connectivity pre-flight check",
@@ -59,8 +70,9 @@ def main() -> None:
         sys.exit(1)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    condition = f"_retrieval-{args.retrieval}" if args.retrieval else ""
     output_path: Path = args.output or (
-        Path(__file__).parent / "outputs" / f"{timestamp}_{args.dataset.stem}.jsonl"
+        Path(__file__).parent / "outputs" / f"{timestamp}_{args.dataset.stem}{condition}.jsonl"
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -83,6 +95,9 @@ def main() -> None:
         for line in args.dataset.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+    if args.retrieval:
+        for case in cases:
+            case["input"]["retrieval"] = args.retrieval
     print(f"Loaded {len(cases)} cases from {args.dataset}", flush=True)
 
     with output_path.open("w", encoding="utf-8") as f:
