@@ -17,7 +17,12 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from console_utf8 import configure_utf8_console
 from evals.adapter import run as agent
+
+# Same reason as main.py / app.py / evals.run: the searcher logs a U+2192
+# arrow and reports carry em-dashes, which kill a cp1252 stdout on Windows.
+configure_utf8_console()
 
 
 def _check_agent_connectivity() -> None:
