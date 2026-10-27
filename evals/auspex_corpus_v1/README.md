@@ -138,6 +138,49 @@ python -m evals.run --corpus-suite --from-outputs evals/outputs/corpus_v1_retrie
 Use a judge model different from (and stronger than) the agent model, at the
 judge's default temperature 0.
 
+### Infra failures are not data
+
+A case that raises, or that finishes with an empty `final_report`, produced no
+report. Scored as-is a judge grades it `incorrect`, so a dropped Ollama
+connection becomes an apparent hallucination and biases whichever arm it landed
+in. Three guards keep that out of the readout:
+
+| Guard | Where | Behavior |
+|---|---|---|
+| Retry | `generate --attempts N` | Re-rolls a failed case (default 3 tries, linear `--retry-backoff`). Pass `--attempts 1` to record the first failure instead. |
+| Refuse | `run --from-outputs` | Exits 1 and lists the failed ids rather than scoring them. `--allow-failed` overrides, with a warning. |
+| Resume | `generate --resume` | Keeps the rows that already succeeded and re-runs only the missing or failed ones. |
+
+`generate` writes a row for every case either way (so the file stays aligned
+with the dataset), marks each failure with an `output.data.error`, lists them on
+stderr, and exits non-zero. `evals.run` reads that same marker via
+`evals.generate.failed_rows`, so there is one definition of a failed row.
+
+For an unattended overnight sweep, stop on a bad arm rather than producing files
+that only look complete, and keep a log:
+
+```sh
+for seed in 1 2 3; do for r in off on; do
+  out=evals/outputs/corpus_v1_retrieval-${r}_seed${seed}.jsonl
+  python -m evals.generate --dataset evals/auspex_corpus_v1/cases.jsonl \
+    --retrieval $r --output "$out" >>evals/outputs/sweep.log 2>&1 || break 2
+done; done
+```
+
+Redirect rather than pipe to `tee`: through a pipe, `||` tests `tee`'s exit
+status, not `generate`'s, so the `break` would never fire. Follow along with
+`tail -f evals/outputs/sweep.log`.
+
+A sweep that stopped partway resumes without losing the completed cases:
+
+```sh
+python -m evals.generate --dataset evals/auspex_corpus_v1/cases.jsonl \
+  --retrieval on --output evals/outputs/corpus_v1_retrieval-on_seed1.jsonl --resume
+```
+
+Keep `--retrieval` on the resume command — it is what sets the arm on the cases
+being re-run.
+
 ## Known confound: public-repo leakage in the baseline
 
 The corpus is this repo, and it is **public** on GitHub

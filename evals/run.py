@@ -36,6 +36,7 @@ from evals.auspex_corpus_v1.scorers import (
     GroundingRetrieved,
     RepoLeakage,
 )
+from evals.generate import failed_rows
 from evals.scorers import MinSources, MustMention, MustNotMention
 
 configure_utf8_console()
@@ -168,6 +169,10 @@ def main() -> None:
                         metavar="OUTPUTS_JSONL",
                         help="Score pre-generated outputs instead of running the agent "
                              "(produced by evals.generate)")
+    parser.add_argument("--allow-failed", action="store_true",
+                        help="Score an outputs file even though some cases produced no "
+                             "report. Off by default: those rows grade as wrong answers "
+                             "rather than dropped runs, which biases the arm.")
     parser.add_argument("--retrieval", choices=["on", "off"], default=None,
                         help="A/B condition for a live run: set input.retrieval on every case. "
                              "Not valid with --from-outputs (saved outputs already carry it).")
@@ -193,6 +198,28 @@ def main() -> None:
         if not args.from_outputs.exists():
             print(f"ERROR: outputs file not found: {args.from_outputs}", file=sys.stderr)
             sys.exit(1)
+        # Rows evals.generate marked as producing no report. Replaying them would
+        # have the judge grade an infra failure as a wrong answer, turning it into
+        # an apparent hallucination and biasing whichever arm it landed in.
+        failed = failed_rows(args.from_outputs)
+        if failed and not args.allow_failed:
+            print(f"ERROR: {len(failed)} case(s) in {args.from_outputs} produced no "
+                  "report:", file=sys.stderr)
+            for case_id, reason in failed:
+                print(f"  - {case_id}: {reason}", file=sys.stderr)
+            print(
+                "\nScoring them would grade infra failures as wrong answers and bias "
+                "this arm. Retry just those cases:\n"
+                f"  python -m evals.generate --dataset <cases.jsonl> "
+                f"--output {args.from_outputs} --resume\n"
+                "Or pass --allow-failed to score anyway and exclude them in the readout.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if failed:
+            print(f"WARNING: scoring {len(failed)} failed case(s) because "
+                  "--allow-failed was passed; exclude them in the readout: "
+                  + ", ".join(case_id for case_id, _ in failed), file=sys.stderr, flush=True)
         agent_fn = _make_replay_agent(args.from_outputs)
         if args.dataset == Path(__file__).parent / "cases" / "cases.jsonl":
             _tmp_dataset = _strip_outputs_to_tmpfile(args.from_outputs)
